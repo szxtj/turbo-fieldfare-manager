@@ -288,3 +288,4 @@ public struct SetupAndRecoveryView: View {
         return Color(red: 0.86, green: 0.86, blue: 0.88)
     }
 }
+

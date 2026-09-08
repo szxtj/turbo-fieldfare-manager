@@ -61,7 +61,6 @@ public final class ServiceManager: ObservableObject {
         self.repoDir = homeDir.appendingPathComponent("turbo-fieldfare")
         self.modelDir = repoDir.appendingPathComponent("scratch/gemma4.gturbo")
         
-        // server.sh 优先取 manager 项目目录，其次主目录
         let scriptCandidates = [
             Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("server.sh"),
             homeDir.appendingPathComponent("Projects/turbo-fieldfare-manager/server.sh"),

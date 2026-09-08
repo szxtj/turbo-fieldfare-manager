@@ -35,6 +35,7 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
     private func updateIconAndMenu() {
         guard let button = statusItem.button else { return }
 
+        // 设置状态栏图标与标题
         let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
         switch manager.state {
         case .running:
@@ -108,6 +109,7 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
+        // 2. 查看服务状态与实时日志
         // 2. 故障自愈核心入口：如果服务未运行、启动失败或遇到问题，优先呈现“尝试恢复”
         if !manager.state.isRunning {
             let recoveryItem = NSMenuItem(
@@ -132,6 +134,7 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
+        // 3. 服务控制项
         // 4. 服务基础控制项
         if manager.state.isRunning {
             let restartItem = NSMenuItem(
@@ -161,6 +164,7 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
+        // 4. 辅助与快捷入口
         // 5. 维护与自愈项
         let syncItem = NSMenuItem(
             title: "检查更新与同步本体...",
@@ -198,6 +202,7 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
+        // 5. 退出
         // 6. 退出
         let quitItem = NSMenuItem(
             title: "退出 (并停止推理服务)",
@@ -266,6 +271,7 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
     }
 
     @objc private func quitApp() {
+        // 用户明确要求：退出时连同推理服务一起停止
         manager.stopService()
         NSApp.terminate(nil)
     }

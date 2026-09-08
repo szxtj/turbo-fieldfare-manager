@@ -4,6 +4,8 @@
 App/.build/
 App/.swiftpm/
 *.app/
+*.dmg
+/AppIcon.icns
 *.xcodeproj
 *.xcworkspace
 
