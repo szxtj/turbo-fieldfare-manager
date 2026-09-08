@@ -113,11 +113,26 @@ start() {
         fi
     fi
 
+    # 4. 视觉伴侣包 (Vision Pack) 自愈与挂载检查
+    VISION_FLAGS=()
+    VISION_PATH="$PROJECT_DIR/scratch/gemma4.vision.gturbo"
+    if [ -d "$VISION_PATH" ]; then
+        # 自动校准迁移后的收据绝对路径绑定，杜绝 path mismatch
+        if [ -f "$VISION_PATH/verified-install.json" ]; then
+            sed -i '' "s|\"companionDirectoryPath\"[[:space:]]*:[[:space:]]*\"[^\"]*\"|\"companionDirectoryPath\" : \"$VISION_PATH\"|g" "$VISION_PATH/verified-install.json" 2>/dev/null || true
+        fi
+        VISION_FLAGS=(--vision-pack "$VISION_PATH" --vision-residency "$VISION_RESIDENCY")
+    fi
+    if [ -f "$MODEL_PATH/verified-install.json" ]; then
+        sed -i '' "s|\"modelDirectoryPath\"[[:space:]]*:[[:space:]]*\"[^\"]*\"|\"modelDirectoryPath\" : \"$MODEL_PATH\"|g" "$MODEL_PATH/verified-install.json" 2>/dev/null || true
+    fi
+
     echo "🚀 正在后台启动 TurboFieldfare 服务..."
     echo "   ├─ 端口: $PORT"
     echo "   ├─ 上下文: $MAX_CONTEXT"
     echo "   ├─ 专家缓存槽位: $EXPERT_CACHE_SLOTS (策略: $EXPERT_CACHE_POLICY)"
     echo "   ├─ Prefill 分块: $PREFILL_CHUNK_TOKENS"
+    echo "   ├─ 视觉模块: $([ -d "$VISION_PATH" ] && echo "已挂载 ($VISION_RESIDENCY)" || echo "未安装")"
     echo "   └─ 模型路径: $MODEL_PATH"
 
     nohup "$BINARY" \
@@ -128,8 +143,8 @@ start() {
         --expert-cache-policy "$EXPERT_CACHE_POLICY" \
         --prefill "$PREFILL" \
         --prefill-chunk-tokens "$PREFILL_CHUNK_TOKENS" \
-        --vision-residency "$VISION_RESIDENCY" \
-        --prompt-cache-mode "$PROMPT_CACHE_MODE" > "$LOG_FILE" 2>&1 &
+        --prompt-cache-mode "$PROMPT_CACHE_MODE" \
+        "${VISION_FLAGS[@]}" > "$LOG_FILE" 2>&1 &
 
     local pid=$!
     echo "$pid" > "$PID_FILE"

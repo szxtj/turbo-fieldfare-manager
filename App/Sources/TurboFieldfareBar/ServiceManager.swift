@@ -50,6 +50,7 @@ public final class ServiceManager: ObservableObject {
     public let homeDir: URL
     public let repoDir: URL
     public let modelDir: URL
+    public let visionDir: URL
     public let serverScript: URL
     public let logFile: URL
     public let pidFile: URL
@@ -60,6 +61,7 @@ public final class ServiceManager: ObservableObject {
         self.homeDir = FileManager.default.homeDirectoryForCurrentUser
         self.repoDir = homeDir.appendingPathComponent("turbo-fieldfare")
         self.modelDir = repoDir.appendingPathComponent("scratch/gemma4.gturbo")
+        self.visionDir = repoDir.appendingPathComponent("scratch/gemma4.vision.gturbo")
         
         let scriptCandidates = [
             Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("server.sh"),
@@ -142,11 +144,38 @@ public final class ServiceManager: ObservableObject {
 
     // MARK: - 服务生命周期控制
 
+    public func ensureReceiptPaths() {
+        let fm = FileManager.default
+        let textReceipt = modelDir.appendingPathComponent("verified-install.json")
+        if fm.fileExists(atPath: textReceipt.path),
+           let data = try? Data(contentsOf: textReceipt),
+           var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if json["modelDirectoryPath"] as? String != modelDir.path {
+                json["modelDirectoryPath"] = modelDir.path
+                if let updated = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]) {
+                    try? updated.write(to: textReceipt)
+                }
+            }
+        }
+        let visionReceipt = visionDir.appendingPathComponent("verified-install.json")
+        if fm.fileExists(atPath: visionReceipt.path),
+           let data = try? Data(contentsOf: visionReceipt),
+           var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if json["companionDirectoryPath"] as? String != visionDir.path {
+                json["companionDirectoryPath"] = visionDir.path
+                if let updated = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]) {
+                    try? updated.write(to: visionReceipt)
+                }
+            }
+        }
+    }
+
     public func startService() {
         guard FileManager.default.fileExists(atPath: repoDir.path) else {
             self.state = .missingRepo
             return
         }
+        ensureReceiptPaths()
         self.state = .starting
         runScriptCommand("start")
     }
@@ -225,17 +254,27 @@ public final class ServiceManager: ObservableObject {
 
     /// 将损坏或现存的模型目录安全移入系统废纸篓，避免不可逆直接删除
     @discardableResult
-    public func safelyTrashDamagedModel() throws -> URL? {
+    public func safelyTrashDamagedModel() throws -> [URL] {
         let fm = FileManager.default
+        var trashedURLs: [URL] = []
         if fm.fileExists(atPath: modelDir.path) {
             var trashedURL: NSURL?
             try fm.trashItem(at: modelDir, resultingItemURL: &trashedURL)
-            return trashedURL as URL?
+            if let url = trashedURL as URL? {
+                trashedURLs.append(url)
+            }
         }
-        return nil
+        if fm.fileExists(atPath: visionDir.path) {
+            var trashedURL: NSURL?
+            try fm.trashItem(at: visionDir, resultingItemURL: &trashedURL)
+            if let url = trashedURL as URL? {
+                trashedURLs.append(url)
+            }
+        }
+        return trashedURLs
     }
 
-    // MARK: - 首次引导全流程 (克隆 -> 编译 -> 自动下载模型 -> 启动)
+    // MARK: - 首次引导全流程 (克隆 -> 编译 -> 自动下载模型(含视觉包) -> 启动)
 
     public func runInitialSetup(progress: @escaping (String) -> Void) async throws {
         let repoUrl = "https://github.com/drumih/turbo-fieldfare.git"
@@ -265,19 +304,32 @@ public final class ServiceManager: ObservableObject {
         }
         progress("✅ 服务端二进制编译成功！\n")
 
-        // 3. 自动下载模型权重
-        progress("📥 步骤 3/4: 正在下载 Gemma 4 26B-A4B 模型权重 (约 14.3GB)...")
+        // 3. 自动下载模型权重（文本 + 多模态图像伴生包）
+        progress("📥 步骤 3/4: 正在下载 Gemma 4 文本模型权重 (约 14.3GB)...")
         progress("💡 提示: 采用流式断点续传下载，耗时取决于网络带宽，请耐心等待...")
-        let downloadCode = await runStreamingProcess(
+        let downloadTextCode = await runStreamingProcess(
             executable: "/usr/bin/swift",
             arguments: ["run", "-c", "release", "TurboFieldfareRepack", "--output", "scratch/gemma4.gturbo", "--overwrite", "--resume"],
             currentDirectory: repoDir,
             outputHandler: progress
         )
-        guard downloadCode == 0 else {
-            throw NSError(domain: "TurboFieldfareBar", code: 3, userInfo: [NSLocalizedDescriptionKey: "下载/解压模型权重失败，支持再次尝试进行断点续传"])
+        guard downloadTextCode == 0 else {
+            throw NSError(domain: "TurboFieldfareBar", code: 3, userInfo: [NSLocalizedDescriptionKey: "下载文本模型权重失败，支持再次尝试进行断点续传"])
         }
-        progress("✅ 模型权重下载并校验成功！\n")
+        progress("✅ 文本模型权重下载并校验成功！\n")
+
+        progress("📥 步骤 3/4 (伴生包): 正在下载 Gemma 4 视觉图像伴生包 (Vision Pack)...")
+        let downloadVisionCode = await runStreamingProcess(
+            executable: "/usr/bin/swift",
+            arguments: ["run", "-c", "release", "TurboFieldfareRepack", "--vision-output", "scratch/gemma4.vision.gturbo", "--text-model", "scratch/gemma4.gturbo", "--overwrite", "--resume"],
+            currentDirectory: repoDir,
+            outputHandler: progress
+        )
+        if downloadVisionCode == 0 {
+            progress("✅ 视觉伴生包下载并绑定成功！\n")
+        } else {
+            progress("⚠️ 视觉伴生包下载未完成（文本服务仍可正常使用），可后续通过恢复重试。\n")
+        }
 
         // 4. 启动服务
         progress("🚀 步骤 4/4: 正在后台拉起 TurboFieldfare 服务...")
@@ -295,7 +347,7 @@ public final class ServiceManager: ObservableObject {
         progress("⚠️ 服务已启动，正在等待模型最终就绪...")
     }
 
-    // MARK: - 故障自愈恢复全流程 (清理 -> 重置/拉取 -> 编译 -> 废纸篓安全备份 -> 重新下载模型 -> 启动)
+    // MARK: - 故障自愈恢复全流程 (清理 -> 重置/拉取 -> 编译 -> 废纸篓安全备份 -> 重新下载模型(含视觉包) -> 启动)
 
     public func runFullRecovery(progress: @escaping (String) -> Void) async throws {
         progress("🛑 步骤 1/6: 正在清理任何僵死或残留的服务进程...")
@@ -338,8 +390,11 @@ public final class ServiceManager: ObservableObject {
         // 4. 将旧模型安全移入系统回收站
         progress("🗑️ 步骤 4/6: 正在将现存可能损坏的模型文件夹安全移入系统废纸篓 (Trash)...")
         do {
-            if let trashedLocation = try safelyTrashDamagedModel() {
-                progress("✅ 已将旧模型移至系统废纸篓: \(trashedLocation.path)")
+            let trashedList = try safelyTrashDamagedModel()
+            if !trashedList.isEmpty {
+                for item in trashedList {
+                    progress("✅ 已将旧目录移至系统废纸篓: \(item.path)")
+                }
                 progress("   (若后续需要恢复旧文件，可随时从系统废纸篓中还原)")
             } else {
                 progress("ℹ️ 未发现旧模型文件夹，无需移动。")
@@ -349,19 +404,32 @@ public final class ServiceManager: ObservableObject {
         }
         progress("\n")
 
-        // 5. 重新下载模型
-        progress("📥 步骤 5/6: 正在重新下载与配置 Gemma 4 模型权重...")
+        // 5. 重新下载模型与视觉包
+        progress("📥 步骤 5/6: 正在重新下载与配置 Gemma 4 文本模型权重...")
         progress("💡 提示: 重新下载支持断点续传，耗时视网速而定...")
-        let downloadCode = await runStreamingProcess(
+        let downloadTextCode = await runStreamingProcess(
             executable: "/usr/bin/swift",
             arguments: ["run", "-c", "release", "TurboFieldfareRepack", "--output", "scratch/gemma4.gturbo", "--overwrite", "--resume"],
             currentDirectory: repoDir,
             outputHandler: progress
         )
-        guard downloadCode == 0 else {
+        guard downloadTextCode == 0 else {
             throw NSError(domain: "TurboFieldfareBar", code: 3, userInfo: [NSLocalizedDescriptionKey: "下载模型失败，请检查网络后重试"])
         }
-        progress("✅ 模型权重下载并就绪！\n")
+        progress("✅ 文本模型权重下载就绪！\n")
+
+        progress("📥 步骤 5/6 (伴生包): 正在下载 Gemma 4 视觉图像伴生包...")
+        let downloadVisionCode = await runStreamingProcess(
+            executable: "/usr/bin/swift",
+            arguments: ["run", "-c", "release", "TurboFieldfareRepack", "--vision-output", "scratch/gemma4.vision.gturbo", "--text-model", "scratch/gemma4.gturbo", "--overwrite", "--resume"],
+            currentDirectory: repoDir,
+            outputHandler: progress
+        )
+        if downloadVisionCode == 0 {
+            progress("✅ 视觉伴生包就绪！\n")
+        } else {
+            progress("⚠️ 视觉伴生包下载未完成（文本服务仍可运行）。\n")
+        }
 
         // 6. 重启服务并验证
         progress("🚀 步骤 6/6: 正在重新拉起后台服务并进行健康检查...")
