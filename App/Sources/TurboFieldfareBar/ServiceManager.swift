@@ -49,17 +49,17 @@ public final class ServiceManager: ObservableObject {
     public let port = 1235
     public let homeDir: URL
     public let repoDir: URL
+    public let modelDir: URL
     public let serverScript: URL
     public let logFile: URL
     public let pidFile: URL
 
     private var monitorTimer: Timer?
-    private var logFileHandle: FileHandle?
-    private var logSource: DispatchSourceFileSystemObject?
 
     private init() {
         self.homeDir = FileManager.default.homeDirectoryForCurrentUser
         self.repoDir = homeDir.appendingPathComponent("turbo-fieldfare")
+        self.modelDir = repoDir.appendingPathComponent("scratch/gemma4.gturbo")
         
         // server.sh 优先取 manager 项目目录，其次主目录
         let scriptCandidates = [
@@ -97,14 +97,12 @@ public final class ServiceManager: ObservableObject {
 
         guard let pid = readPID(), isProcessAlive(pid: pid) else {
             if case .starting = state {
-                // 如果刚刚发出 start 指令，容忍 5 秒启动过渡期
                 return
             }
             self.state = .stopped
             return
         }
 
-        // 异步探测 HTTP 探针
         Task {
             let healthy = await checkHealth()
             if healthy {
@@ -192,7 +190,7 @@ public final class ServiceManager: ObservableObject {
         }
     }
 
-    // MARK: - 仓库检测与一键克隆
+    // MARK: - 仓库检测
 
     public func checkRepoStatus() async -> RepoCheckResult {
         guard FileManager.default.fileExists(atPath: repoDir.appendingPathComponent(".git").path) else {
@@ -201,16 +199,15 @@ public final class ServiceManager: ObservableObject {
                 isUpToDate: false,
                 localCommit: "",
                 remoteCommit: "",
-                message: "本体仓库不存在，需要克隆"
+                message: "本体仓库不存在，需要初始化克隆"
             )
             self.repoStatus = res
             return res
         }
 
-        // git fetch & 比较 HEAD 与 origin/main
-        _ = await runProcess(executable: "/usr/bin/git", arguments: ["-C", repoDir.path, "fetch", "origin", "main"])
-        let localCommit = await runProcess(executable: "/usr/bin/git", arguments: ["-C", repoDir.path, "rev-parse", "--short", "HEAD"]).trimmingCharacters(in: .whitespacesAndNewlines)
-        let remoteCommit = await runProcess(executable: "/usr/bin/git", arguments: ["-C", repoDir.path, "rev-parse", "--short", "origin/main"]).trimmingCharacters(in: .whitespacesAndNewlines)
+        _ = await runSimpleProcess(executable: "/usr/bin/git", arguments: ["-C", repoDir.path, "fetch", "origin", "main"])
+        let localCommit = await runSimpleProcess(executable: "/usr/bin/git", arguments: ["-C", repoDir.path, "rev-parse", "--short", "HEAD"]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let remoteCommit = await runSimpleProcess(executable: "/usr/bin/git", arguments: ["-C", repoDir.path, "rev-parse", "--short", "origin/main"]).trimmingCharacters(in: .whitespacesAndNewlines)
 
         let isUpToDate = (!localCommit.isEmpty && localCommit == remoteCommit)
         let message = isUpToDate ? "已是最新版本 (\(localCommit))" : "发现新版本 (本地: \(localCommit) -> 远端: \(remoteCommit))"
@@ -225,44 +222,235 @@ public final class ServiceManager: ObservableObject {
         return res
     }
 
-    public func cloneOfficialRepo(progressHandler: @escaping (String) -> Void) async throws {
-        let repoUrl = "https://github.com/drumih/turbo-fieldfare.git"
-        progressHandler("正在克隆官方仓库到 \(repoDir.path)...")
-        
-        let output = await runProcess(executable: "/usr/bin/git", arguments: ["clone", repoUrl, repoDir.path])
-        progressHandler(output)
+    // MARK: - 安全回收站操作 (Trash Item)
 
-        guard FileManager.default.fileExists(atPath: repoDir.appendingPathComponent("Package.swift").path) else {
-            throw NSError(domain: "TurboFieldfareBar", code: 1, userInfo: [NSLocalizedDescriptionKey: "克隆失败或缺少 Package.swift"])
+    /// 将损坏或现存的模型目录安全移入系统废纸篓，避免不可逆直接删除
+    @discardableResult
+    public func safelyTrashDamagedModel() throws -> URL? {
+        let fm = FileManager.default
+        if fm.fileExists(atPath: modelDir.path) {
+            var trashedURL: NSURL?
+            try fm.trashItem(at: modelDir, resultingItemURL: &trashedURL)
+            return trashedURL as URL?
         }
-
-        progressHandler("正在编译发布版本 TurboFieldfareServer (需要 1-2 分钟)...")
-        let buildOutput = await runProcess(
-            executable: "/usr/bin/swift",
-            arguments: ["build", "-c", "release", "--product", "TurboFieldfareServer"],
-            currentDirectory: repoDir
-        )
-        progressHandler(buildOutput)
-        progressHandler("初始化构建完成！")
+        return nil
     }
 
-    public func syncToLatest(progressHandler: @escaping (String) -> Void) async {
-        progressHandler("正在拉取最新代码...")
-        let pullOutput = await runProcess(executable: "/usr/bin/git", arguments: ["-C", repoDir.path, "pull", "origin", "main"])
-        progressHandler(pullOutput)
+    // MARK: - 首次引导全流程 (克隆 -> 编译 -> 自动下载模型 -> 启动)
 
-        progressHandler("正在重新编译...")
-        let buildOutput = await runProcess(
+    public func runInitialSetup(progress: @escaping (String) -> Void) async throws {
+        let repoUrl = "https://github.com/drumih/turbo-fieldfare.git"
+        
+        // 1. 克隆
+        progress("🚀 步骤 1/4: 正在从官方源克隆本体仓库到 \(repoDir.path)...")
+        let cloneCode = await runStreamingProcess(
+            executable: "/usr/bin/git",
+            arguments: ["clone", repoUrl, repoDir.path],
+            outputHandler: progress
+        )
+        guard cloneCode == 0, FileManager.default.fileExists(atPath: repoDir.appendingPathComponent("Package.swift").path) else {
+            throw NSError(domain: "TurboFieldfareBar", code: 1, userInfo: [NSLocalizedDescriptionKey: "克隆官方仓库失败，请检查网络连接"])
+        }
+        progress("✅ 官方仓库克隆成功！\n")
+
+        // 2. 编译服务端
+        progress("⚙️ 步骤 2/4: 正在编译发布版 TurboFieldfareServer (预计需 1-2 分钟)...")
+        let buildCode = await runStreamingProcess(
             executable: "/usr/bin/swift",
             arguments: ["build", "-c", "release", "--product", "TurboFieldfareServer"],
-            currentDirectory: repoDir
+            currentDirectory: repoDir,
+            outputHandler: progress
         )
-        progressHandler(buildOutput)
-        progressHandler("同步与重新构建完成！")
+        guard buildCode == 0 else {
+            throw NSError(domain: "TurboFieldfareBar", code: 2, userInfo: [NSLocalizedDescriptionKey: "编译 TurboFieldfareServer 失败，请查看上方输出"])
+        }
+        progress("✅ 服务端二进制编译成功！\n")
+
+        // 3. 自动下载模型权重
+        progress("📥 步骤 3/4: 正在下载 Gemma 4 26B-A4B 模型权重 (约 14.3GB)...")
+        progress("💡 提示: 采用流式断点续传下载，耗时取决于网络带宽，请耐心等待...")
+        let downloadCode = await runStreamingProcess(
+            executable: "/usr/bin/swift",
+            arguments: ["run", "-c", "release", "TurboFieldfareRepack", "--output", "scratch/gemma4.gturbo", "--overwrite", "--resume"],
+            currentDirectory: repoDir,
+            outputHandler: progress
+        )
+        guard downloadCode == 0 else {
+            throw NSError(domain: "TurboFieldfareBar", code: 3, userInfo: [NSLocalizedDescriptionKey: "下载/解压模型权重失败，支持再次尝试进行断点续传"])
+        }
+        progress("✅ 模型权重下载并校验成功！\n")
+
+        // 4. 启动服务
+        progress("🚀 步骤 4/4: 正在后台拉起 TurboFieldfare 服务...")
+        startService()
+        
+        var retries = 0
+        while retries < 15 {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            retries += 1
+            if await checkHealth() {
+                progress("🎉 服务初始化全部完成，健康检查通过 (HTTP 200)！已为您自动常驻系统状态栏。")
+                return
+            }
+        }
+        progress("⚠️ 服务已启动，正在等待模型最终就绪...")
+    }
+
+    // MARK: - 故障自愈恢复全流程 (清理 -> 重置/拉取 -> 编译 -> 废纸篓安全备份 -> 重新下载模型 -> 启动)
+
+    public func runFullRecovery(progress: @escaping (String) -> Void) async throws {
+        progress("🛑 步骤 1/6: 正在清理任何僵死或残留的服务进程...")
+        stopService()
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        progress("✅ 进程环境清理完毕。\n")
+
+        // 2. 检查并重置/克隆仓库
+        if !FileManager.default.fileExists(atPath: repoDir.appendingPathComponent(".git").path) {
+            progress("🌐 步骤 2/6: 未检测到本体仓库，正在重新克隆...")
+            let repoUrl = "https://github.com/drumih/turbo-fieldfare.git"
+            let cloneCode = await runStreamingProcess(
+                executable: "/usr/bin/git",
+                arguments: ["clone", repoUrl, repoDir.path],
+                outputHandler: progress
+            )
+            guard cloneCode == 0 else {
+                throw NSError(domain: "TurboFieldfareBar", code: 1, userInfo: [NSLocalizedDescriptionKey: "克隆仓库失败"])
+            }
+        } else {
+            progress("🔄 步骤 2/6: 正在拉取官方最新代码并恢复纯净状态...")
+            _ = await runStreamingProcess(executable: "/usr/bin/git", arguments: ["-C", repoDir.path, "fetch", "origin", "main"], outputHandler: progress)
+            _ = await runStreamingProcess(executable: "/usr/bin/git", arguments: ["-C", repoDir.path, "reset", "--hard", "origin/main"], outputHandler: progress)
+        }
+        progress("✅ 仓库代码状态已对齐官方最新主线！\n")
+
+        // 3. 重新编译
+        progress("⚙️ 步骤 3/6: 正在重新编译 TurboFieldfareServer...")
+        let buildCode = await runStreamingProcess(
+            executable: "/usr/bin/swift",
+            arguments: ["build", "-c", "release", "--product", "TurboFieldfareServer"],
+            currentDirectory: repoDir,
+            outputHandler: progress
+        )
+        guard buildCode == 0 else {
+            throw NSError(domain: "TurboFieldfareBar", code: 2, userInfo: [NSLocalizedDescriptionKey: "编译失败"])
+        }
+        progress("✅ 重新编译完成！\n")
+
+        // 4. 将旧模型安全移入系统回收站
+        progress("🗑️ 步骤 4/6: 正在将现存可能损坏的模型文件夹安全移入系统废纸篓 (Trash)...")
+        do {
+            if let trashedLocation = try safelyTrashDamagedModel() {
+                progress("✅ 已将旧模型移至系统废纸篓: \(trashedLocation.path)")
+                progress("   (若后续需要恢复旧文件，可随时从系统废纸篓中还原)")
+            } else {
+                progress("ℹ️ 未发现旧模型文件夹，无需移动。")
+            }
+        } catch {
+            progress("⚠️ 移入废纸篓时出现异常: \(error.localizedDescription)，继续下一步...")
+        }
+        progress("\n")
+
+        // 5. 重新下载模型
+        progress("📥 步骤 5/6: 正在重新下载与配置 Gemma 4 模型权重...")
+        progress("💡 提示: 重新下载支持断点续传，耗时视网速而定...")
+        let downloadCode = await runStreamingProcess(
+            executable: "/usr/bin/swift",
+            arguments: ["run", "-c", "release", "TurboFieldfareRepack", "--output", "scratch/gemma4.gturbo", "--overwrite", "--resume"],
+            currentDirectory: repoDir,
+            outputHandler: progress
+        )
+        guard downloadCode == 0 else {
+            throw NSError(domain: "TurboFieldfareBar", code: 3, userInfo: [NSLocalizedDescriptionKey: "下载模型失败，请检查网络后重试"])
+        }
+        progress("✅ 模型权重下载并就绪！\n")
+
+        // 6. 重启服务并验证
+        progress("🚀 步骤 6/6: 正在重新拉起后台服务并进行健康检查...")
+        startService()
+
+        var retries = 0
+        while retries < 15 {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            retries += 1
+            if await checkHealth() {
+                progress("🎉 故障恢复成功！推理服务已正常工作 (HTTP 200)！")
+                return
+            }
+        }
+        progress("⚠️ 服务已重新拉起，请在状态栏菜单中观察健康状态。")
+    }
+
+    // MARK: - 同步最新版本
+
+    public func syncToLatest(progress: @escaping (String) -> Void) async {
+        progress("正在拉取最新代码...")
+        _ = await runStreamingProcess(executable: "/usr/bin/git", arguments: ["-C", repoDir.path, "pull", "origin", "main"], outputHandler: progress)
+
+        progress("正在重新编译 TurboFieldfareServer...")
+        _ = await runStreamingProcess(
+            executable: "/usr/bin/swift",
+            arguments: ["build", "-c", "release", "--product", "TurboFieldfareServer"],
+            currentDirectory: repoDir,
+            outputHandler: progress
+        )
+        progress("同步与构建完成！")
         _ = await checkRepoStatus()
     }
 
-    private func runProcess(executable: String, arguments: [String], currentDirectory: URL? = nil) async -> String {
+    // MARK: - 实时流式子进程执行器
+
+    public func runStreamingProcess(
+        executable: String,
+        arguments: [String],
+        currentDirectory: URL? = nil,
+        outputHandler: @escaping (String) -> Void
+    ) async -> Int32 {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: executable)
+                process.arguments = arguments
+                if let currentDirectory = currentDirectory {
+                    process.currentDirectoryURL = currentDirectory
+                }
+
+                let pipe = Pipe()
+                process.standardOutput = pipe
+                process.standardError = pipe
+
+                let handle = pipe.fileHandleForReading
+                handle.readabilityHandler = { fileHandle in
+                    let data = fileHandle.availableData
+                    if !data.isEmpty, let text = String(data: data, encoding: .utf8) {
+                        DispatchQueue.main.async {
+                            outputHandler(text)
+                        }
+                    }
+                }
+
+                do {
+                    try process.run()
+                    process.waitUntilExit()
+                    handle.readabilityHandler = nil
+                    let remaining = handle.readDataToEndOfFile()
+                    if !remaining.isEmpty, let text = String(data: remaining, encoding: .utf8) {
+                        DispatchQueue.main.async {
+                            outputHandler(text)
+                        }
+                    }
+                    continuation.resume(returning: process.terminationStatus)
+                } catch {
+                    handle.readabilityHandler = nil
+                    DispatchQueue.main.async {
+                        outputHandler("进程异常: \(error.localizedDescription)\n")
+                    }
+                    continuation.resume(returning: 1)
+                }
+            }
+        }
+    }
+
+    private func runSimpleProcess(executable: String, arguments: [String], currentDirectory: URL? = nil) async -> String {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 let process = Process()
@@ -291,7 +479,6 @@ public final class ServiceManager: ObservableObject {
 
     private func startLogTail() {
         reloadLogs()
-        // 使用 Timer 定期读取新增日志
         Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.reloadLogs()
@@ -304,7 +491,6 @@ public final class ServiceManager: ObservableObject {
         do {
             let content = try String(contentsOf: logFile, encoding: .utf8)
             let lines = content.components(separatedBy: .newlines)
-            // 取最后 200 行
             let tail = lines.suffix(200).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
             self.lastLogLines = Array(tail)
         } catch {
@@ -317,4 +503,3 @@ public final class ServiceManager: ObservableObject {
         self.lastLogLines = []
     }
 }
-
