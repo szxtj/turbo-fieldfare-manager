@@ -63,31 +63,53 @@ EOF
 
 chmod +x "$OUTPUT_APP/Contents/MacOS/TurboFieldfareBar"
 
-# 3. 签名检测与执行 (严格过滤公司/团队签名，优先个人签名，无则使用无签名)
+# 3. 签名检测与执行 (严格过滤公司/团队/企业签名，支持纯个人签名或纯开源 Ad-hoc 无签名)
 echo "🔐 检测代码签名证书..."
 
-PERSONAL_IDENTITY=""
-# 提取所有代码签名身份
-IDENTITIES=$(security find-identity -v -p codesigning 2>/dev/null || true)
+SIGNING_IDENTITY=""
 
-if [ -n "$IDENTITIES" ]; then
-    # 严格排除含有公司、团队、组织关键字的证书
-    FILTERED_IDENTITIES=$(echo "$IDENTITIES" | grep -v -i -E "Co\.|Ltd|Inc|Corp|Company|Team|Enterprise|Group|Distribution")
-    
-    # 优先匹配当前用户的个人证书 (如包含 Justin 或 Apple Development)
-    PERSONAL_IDENTITY=$(echo "$FILTERED_IDENTITIES" | grep -i "Justin" | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
-    
-    if [ -z "$PERSONAL_IDENTITY" ]; then
-        PERSONAL_IDENTITY=$(echo "$FILTERED_IDENTITIES" | grep "Apple Development:" | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
-    fi
+if [ "$1" = "--adhoc" ] || [ "$SIGN_MODE" = "adhoc" ]; then
+    echo "   ⚡ 用户指定纯开源 Ad-hoc 签名模式 (无任何个人/企业/付费证书信息)..."
+else
+    # 动态通过 openssl 深度分析证书 X.509 Subject，杜绝仅凭名字误判企业证书
+    SIGNING_IDENTITY=$(python3 - << 'PYEOF'
+import subprocess, re, sys
+
+try:
+    identities = subprocess.check_output(["security", "find-identity", "-v", "-p", "codesigning"], stderr=subprocess.DEVNULL).decode()
+except Exception:
+    sys.exit(0)
+
+# 严格过滤所有公司、企业、团队、商业域名、机构关键字
+corporate_regex = re.compile(r'(Co\.|Ltd|Inc|Corp|Company|Team|Enterprise|Group|Distribution|Technology|Shuxun|Quanbiao|Beyondpost)', re.I)
+
+for line in identities.splitlines():
+    m = re.search(r'([0-9A-F]{40})\s+"([^"]+)"', line)
+    if not m:
+        continue
+    sha, name = m.group(1), m.group(2)
+    # 必须是开发证书，排除分发/企业发布证书
+    if "Development" not in name:
+        continue
+    try:
+        cert_pem = subprocess.check_output(["security", "find-certificate", "-c", name, "-p"], stderr=subprocess.DEVNULL).decode()
+        subj = subprocess.check_output(["openssl", "x509", "-subject", "-noout"], input=cert_pem.encode(), stderr=subprocess.DEVNULL).decode().strip()
+    except Exception:
+        continue
+    # 深度检查 Subject（严格过滤 O= 机构与 OU= 组织）
+    if not corporate_regex.search(subj):
+        print(name)
+        break
+PYEOF
+)
 fi
 
-if [ -n "$PERSONAL_IDENTITY" ]; then
-    echo "   ✅ 发现本地个人开发者签名: $PERSONAL_IDENTITY"
+if [ -n "$SIGNING_IDENTITY" ] && [ "$1" != "--adhoc" ]; then
+    echo "   ✅ 发现通过严格审核的纯个人签名证书: $SIGNING_IDENTITY"
     echo "   ✍️  正在应用个人签名..."
-    codesign --force --deep --sign "$PERSONAL_IDENTITY" "$OUTPUT_APP"
+    codesign --force --deep --sign "$SIGNING_IDENTITY" "$OUTPUT_APP"
 else
-    echo "   ℹ️  未检测到个人签名证书（或已安全过滤企业/团队证书），采用本地无签名/Ad-hoc 模式 (-)..."
+    echo "   🛡️  使用纯开源 Ad-hoc 无签名模式 (代码签名标记: -，绝无任何公司/组织/付费账号泄漏)..."
     codesign --force --deep --sign - "$OUTPUT_APP"
 fi
 
