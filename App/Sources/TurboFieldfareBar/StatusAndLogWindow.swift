@@ -6,12 +6,15 @@ public final class StatusAndLogWindowController: NSWindowController {
 
     private init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 720, height: 560),
+            contentRect: NSRect(x: 0, y: 0, width: 740, height: 580),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
-        window.title = "TurboFieldfare 服务状态与实时日志"
+        window.title = LocalizationManager.shared.tr(
+            "TurboFieldfare Service Status & Live Logs",
+            "TurboFieldfare 服务状态与实时日志"
+        )
         window.center()
         window.setFrameAutosaveName("TurboFieldfareStatusAndLogWindow")
         window.isReleasedWhenClosed = false
@@ -25,6 +28,10 @@ public final class StatusAndLogWindowController: NSWindowController {
     }
 
     public func showAndActivate() {
+        self.window?.title = LocalizationManager.shared.tr(
+            "TurboFieldfare Service Status & Live Logs",
+            "TurboFieldfare 服务状态与实时日志"
+        )
         self.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
         self.window?.makeKeyAndOrderFront(nil)
@@ -33,6 +40,8 @@ public final class StatusAndLogWindowController: NSWindowController {
 
 public struct StatusAndLogView: View {
     @ObservedObject var manager = ServiceManager.shared
+    @ObservedObject var l10n = LocalizationManager.shared
+
     @State private var autoScroll: Bool = true
     @State private var copyBanner: String? = nil
     @State private var isSyncing: Bool = false
@@ -58,7 +67,7 @@ public struct StatusAndLogView: View {
             // MARK: - 日志区域
             logConsoleView
         }
-        .frame(minWidth: 640, minHeight: 480)
+        .frame(minWidth: 660, minHeight: 500)
         .onAppear {
             manager.reloadLogs()
         }
@@ -94,10 +103,10 @@ public struct StatusAndLogView: View {
                 }
 
                 HStack(spacing: 14) {
-                    Label("端口: \(manager.port)", systemImage: "network")
-                    Label("上下文: 32K", systemImage: "doc.text")
-                    Label("专家槽位: 24 (LFU)", systemImage: "cpu")
-                    Label("Prefill: auto", systemImage: "bolt.fill")
+                    Label(l10n.tr("Port: \(manager.port)", "端口: \(manager.port)"), systemImage: "network")
+                    Label(l10n.tr("Context: \(manager.config.maxContext / 1024)K", "上下文: \(manager.config.maxContext / 1024)K"), systemImage: "doc.text")
+                    Label(l10n.tr("Slots: \(manager.config.expertCacheSlots) (\(manager.config.expertCachePolicy.uppercased()))", "专家槽位: \(manager.config.expertCacheSlots) (\(manager.config.expertCachePolicy.uppercased()))"), systemImage: "cpu")
+                    Label(l10n.tr("Prefill: \(manager.config.prefillChunkTokens)", "Prefill: \(manager.config.prefillChunkTokens)"), systemImage: "bolt.fill")
                 }
                 .font(.caption)
                 .foregroundColor(.secondary)
@@ -109,18 +118,18 @@ public struct StatusAndLogView: View {
             HStack(spacing: 10) {
                 if manager.state.isRunning {
                     Button(action: { manager.restartService() }) {
-                        Label("重启服务", systemImage: "arrow.clockwise")
+                        Label(l10n.tr("Restart", "重启服务"), systemImage: "arrow.clockwise")
                     }
                     .buttonStyle(.bordered)
 
                     Button(action: { manager.stopService() }) {
-                        Label("停止服务", systemImage: "stop.fill")
+                        Label(l10n.tr("Stop Service", "停止服务"), systemImage: "stop.fill")
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
                 } else {
                     Button(action: { manager.startService() }) {
-                        Label("启动服务", systemImage: "play.fill")
+                        Label(l10n.tr("Start Service", "启动服务"), systemImage: "play.fill")
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.green)
@@ -134,7 +143,7 @@ public struct StatusAndLogView: View {
         HStack(spacing: 12) {
             // API 快速复制
             Button(action: copyCurl) {
-                Label("复制测试 cURL", systemImage: "doc.on.doc")
+                Label(l10n.tr("Copy Test cURL", "复制测试 cURL"), systemImage: "doc.on.doc")
             }
             .buttonStyle(.bordered)
 
@@ -142,7 +151,7 @@ public struct StatusAndLogView: View {
             Button(action: {
                 SettingsWindowController.shared.showAndActivate()
             }) {
-                Label("运行参数设置", systemImage: "gearshape")
+                Label(l10n.tr("Settings", "运行参数设置"), systemImage: "gearshape")
             }
             .buttonStyle(.bordered)
 
@@ -156,13 +165,13 @@ public struct StatusAndLogView: View {
             Spacer()
 
             // 自动滚动开关
-            Toggle("自动滚动", isOn: $autoScroll)
+            Toggle(l10n.tr("Auto-scroll", "自动滚动"), isOn: $autoScroll)
                 .toggleStyle(.checkbox)
                 .font(.caption)
 
             // 清理日志
             Button(action: { manager.clearLogs() }) {
-                Label("清空", systemImage: "trash")
+                Label(l10n.tr("Clear", "清空"), systemImage: "trash")
             }
             .buttonStyle(.borderless)
             .font(.caption)
@@ -171,7 +180,7 @@ public struct StatusAndLogView: View {
             Button(action: {
                 NSWorkspace.shared.activateFileViewerSelecting([manager.logFile])
             }) {
-                Label("打开日志文件", systemImage: "arrow.up.right.square")
+                Label(l10n.tr("Open Log File", "打开日志文件"), systemImage: "arrow.up.right.square")
             }
             .buttonStyle(.borderless)
             .font(.caption)
@@ -184,10 +193,13 @@ public struct StatusAndLogView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     if manager.lastLogLines.isEmpty {
-                        Text("暂无日志输出，启动服务后即可在此查看实时输出。")
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundColor(.secondary)
-                            .padding(16)
+                        Text(l10n.tr(
+                            "No logs yet. Real-time stdout and stderr will appear here once the server starts.",
+                            "暂无日志输出，启动服务后即可在此查看实时输出。"
+                        ))
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .padding(16)
                     } else {
                         ForEach(Array(manager.lastLogLines.enumerated()), id: \.offset) { index, line in
                             Text(line)
@@ -228,15 +240,15 @@ public struct StatusAndLogView: View {
     private var statusBadgeText: String {
         switch manager.state {
         case .running(let pid, _):
-            return "运行中 (PID: \(pid))"
+            return l10n.tr("Running (PID: \(pid))", "运行中 (PID: \(pid))")
         case .starting:
-            return "初始化/启动中..."
+            return l10n.tr("Starting up...", "初始化/启动中...")
         case .stopped:
-            return "已停止"
+            return l10n.tr("Stopped", "已停止")
         case .missingRepo:
-            return "未找到本体仓库 (~/turbo-fieldfare)"
+            return l10n.tr("Missing upstream repo (~/turbo-fieldfare)", "未找到本体仓库 (~/turbo-fieldfare)")
         case .error(let msg):
-            return "异常: \(msg)"
+            return l10n.tr("Error: \(msg)", "异常: \(msg)")
         }
     }
 
@@ -257,12 +269,12 @@ public struct StatusAndLogView: View {
         let curlCommand = """
         curl http://127.0.0.1:\(manager.port)/v1/chat/completions \\
           -H 'Content-Type: application/json' \\
-          -d '{"model":"gemma-4-26b-a4b-it","messages":[{"role":"user","content":"你好，请用一句话介绍你自己"}]}'
+          -d '{"model":"gemma-4-26b-a4b-it","messages":[{"role":"user","content":"Hello, please introduce yourself in one sentence."}]}'
         """
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(curlCommand, forType: .string)
         withAnimation {
-            copyBanner = "cURL 指令已复制到剪贴板！"
+            copyBanner = l10n.tr("cURL command copied to clipboard!", "cURL 指令已复制到剪贴板！")
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
             withAnimation {
@@ -271,4 +283,3 @@ public struct StatusAndLogView: View {
         }
     }
 }
-
