@@ -8,6 +8,7 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
     private var menu: NSMenu!
     private var cancellables = Set<AnyCancellable>()
     private let manager = ServiceManager.shared
+    private let l10n = LocalizationManager.shared
 
     public override init() {
         super.init()
@@ -30,12 +31,18 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
                 self?.updateIconAndMenu()
             }
             .store(in: &cancellables)
+
+        l10n.$language
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.updateIconAndMenu()
+            }
+            .store(in: &cancellables)
     }
 
     private func updateIconAndMenu() {
         guard let button = statusItem.button else { return }
 
-        // 设置状态栏图标与标题
         let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
         switch manager.state {
         case .running:
@@ -44,35 +51,50 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
                 button.image = image
             }
             button.title = " TF"
-            button.toolTip = "TurboFieldfare: 运行中 (端口: \(manager.port))"
+            button.toolTip = l10n.tr(
+                "TurboFieldfare: Running (Port: \(manager.port))",
+                "TurboFieldfare: 运行中 (端口: \(manager.port))"
+            )
         case .starting:
             if let image = NSImage(systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: "Starting")?.withSymbolConfiguration(config) {
                 image.isTemplate = true
                 button.image = image
             }
             button.title = " ..."
-            button.toolTip = "TurboFieldfare: 正在启动/初始化..."
+            button.toolTip = l10n.tr(
+                "TurboFieldfare: Starting up / Initializing...",
+                "TurboFieldfare: 正在启动/初始化..."
+            )
         case .stopped:
             if let image = NSImage(systemSymbolName: "bolt.slash", accessibilityDescription: "Stopped")?.withSymbolConfiguration(config) {
                 image.isTemplate = true
                 button.image = image
             }
             button.title = ""
-            button.toolTip = "TurboFieldfare: 服务已停止"
+            button.toolTip = l10n.tr(
+                "TurboFieldfare: Service stopped",
+                "TurboFieldfare: 服务已停止"
+            )
         case .missingRepo:
             if let image = NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: "Missing Repo")?.withSymbolConfiguration(config) {
                 image.isTemplate = true
                 button.image = image
             }
             button.title = " !"
-            button.toolTip = "TurboFieldfare: 未找到本体仓库 (~/turbo-fieldfare)"
+            button.toolTip = l10n.tr(
+                "TurboFieldfare: Missing upstream repo (~/turbo-fieldfare)",
+                "TurboFieldfare: 未找到本体仓库 (~/turbo-fieldfare)"
+            )
         case .error(let msg):
             if let image = NSImage(systemSymbolName: "exclamationmark.circle", accessibilityDescription: "Error")?.withSymbolConfiguration(config) {
                 image.isTemplate = true
                 button.image = image
             }
             button.title = ""
-            button.toolTip = "TurboFieldfare 异常: \(msg)"
+            button.toolTip = l10n.tr(
+                "TurboFieldfare Error: \(msg)",
+                "TurboFieldfare 异常: \(msg)"
+            )
         }
     }
 
@@ -93,15 +115,15 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
         let statusText: String
         switch manager.state {
         case .running(let pid, let port):
-            statusText = "🟢 状态: 运行中 (PID: \(pid), 端口: \(port))"
+            statusText = "🟢 " + l10n.tr("Status: Running (PID: \(pid), Port: \(port))", "状态: 运行中 (PID: \(pid), 端口: \(port))")
         case .starting:
-            statusText = "🟡 状态: 正在初始化 / 加载中..."
+            statusText = "🟡 " + l10n.tr("Status: Initializing / Loading weights...", "状态: 正在初始化 / 加载中...")
         case .stopped:
-            statusText = "🔴 状态: 已停止"
+            statusText = "🔴 " + l10n.tr("Status: Stopped", "状态: 已停止")
         case .missingRepo:
-            statusText = "⚠️ 状态: 未找到本体仓库 (~/turbo-fieldfare)"
+            statusText = "⚠️ " + l10n.tr("Status: Missing upstream repo (~/turbo-fieldfare)", "状态: 未找到本体仓库 (~/turbo-fieldfare)")
         case .error(let msg):
-            statusText = "❌ 异常: \(msg)"
+            statusText = "❌ " + l10n.tr("Error: \(msg)", "异常: \(msg)")
         }
         let statusItem = NSMenuItem(title: statusText, action: nil, keyEquivalent: "")
         statusItem.isEnabled = false
@@ -109,11 +131,10 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        // 2. 查看服务状态与实时日志
         // 2. 故障自愈核心入口：如果服务未运行、启动失败或遇到问题，优先呈现“尝试恢复”
         if !manager.state.isRunning {
             let recoveryItem = NSMenuItem(
-                title: "🛠️ 尝试恢复服务 (重新克隆/编译/安全重下模型)...",
+                title: "🛠️ " + l10n.tr("Recover Service (Re-clone / Rebuild / Safe Re-download)...", "尝试恢复服务 (重新克隆/编译/安全重下模型)..."),
                 action: #selector(showRecoveryWizard),
                 keyEquivalent: ""
             )
@@ -125,7 +146,7 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
 
         // 3. 查看服务状态与实时日志
         let showLogItem = NSMenuItem(
-            title: "查看服务状态与实时日志...",
+            title: l10n.tr("Service Status & Live Logs...", "查看服务状态与实时日志..."),
             action: #selector(showStatusAndLogWindow),
             keyEquivalent: "l"
         )
@@ -133,7 +154,7 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
         menu.addItem(showLogItem)
 
         let settingsItem = NSMenuItem(
-            title: "⚙️ 服务偏好设置与运行参数...",
+            title: "⚙️ " + l10n.tr("Settings & Runtime Parameters...", "服务偏好设置与运行参数..."),
             action: #selector(showSettingsWindow),
             keyEquivalent: ","
         )
@@ -142,11 +163,10 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        // 3. 服务控制项
         // 4. 服务基础控制项
         if manager.state.isRunning {
             let restartItem = NSMenuItem(
-                title: "重启服务",
+                title: l10n.tr("Restart Service", "重启服务"),
                 action: #selector(restartService),
                 keyEquivalent: "r"
             )
@@ -154,7 +174,7 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
             menu.addItem(restartItem)
 
             let stopItem = NSMenuItem(
-                title: "停止服务",
+                title: l10n.tr("Stop Service", "停止服务"),
                 action: #selector(stopService),
                 keyEquivalent: "s"
             )
@@ -162,7 +182,7 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
             menu.addItem(stopItem)
         } else {
             let startItem = NSMenuItem(
-                title: "启动服务",
+                title: l10n.tr("Start Service", "启动服务"),
                 action: #selector(startService),
                 keyEquivalent: "s"
             )
@@ -172,10 +192,9 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        // 4. 辅助与快捷入口
         // 5. 维护与自愈项
         let syncItem = NSMenuItem(
-            title: "检查更新与同步本体...",
+            title: l10n.tr("Check for Updates & Sync Upstream...", "检查更新与同步本体..."),
             action: #selector(checkAndSyncUpdates),
             keyEquivalent: "u"
         )
@@ -184,7 +203,7 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
 
         if manager.state.isRunning {
             let advancedRecoveryItem = NSMenuItem(
-                title: "故障自愈与重装中心...",
+                title: l10n.tr("Troubleshooting & Recovery Center...", "故障自愈与重装中心..."),
                 action: #selector(showRecoveryWizard),
                 keyEquivalent: ""
             )
@@ -193,7 +212,7 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
         }
 
         let openRepoItem = NSMenuItem(
-            title: "打开本体目录 (~/turbo-fieldfare)",
+            title: l10n.tr("Open Upstream Folder (~/turbo-fieldfare)", "打开本体目录 (~/turbo-fieldfare)"),
             action: #selector(openRepoFolder),
             keyEquivalent: ""
         )
@@ -201,7 +220,7 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
         menu.addItem(openRepoItem)
 
         let openLogItem = NSMenuItem(
-            title: "打开运行日志文件",
+            title: l10n.tr("Open Server Log File", "打开运行日志文件"),
             action: #selector(openLogFile),
             keyEquivalent: ""
         )
@@ -210,10 +229,9 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        // 5. 退出
         // 6. 退出
         let quitItem = NSMenuItem(
-            title: "退出 (并停止推理服务)",
+            title: l10n.tr("Quit (Stop Inference Service)", "退出 (并停止推理服务)"),
             action: #selector(quitApp),
             keyEquivalent: "q"
         )
@@ -260,30 +278,43 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
         Task {
             let status = await manager.checkRepoStatus()
             if !status.exists {
-                SetupAndRecoveryWindowController.shared.show(mode: .firstRun)
-            } else if !status.isUpToDate {
                 let alert = NSAlert()
-                alert.messageText = "发现官方最新版本更新"
-                alert.informativeText = "\(status.message)\n\n是否立即拉取更新并自动重新编译？"
-                alert.addButton(withTitle: "立即同步并编译")
-                alert.addButton(withTitle: "稍后")
+                alert.messageText = l10n.tr("Missing Upstream Repository", "未检测到本体仓库")
+                alert.informativeText = l10n.tr(
+                    "No repository found at ~/turbo-fieldfare. Would you like to launch the setup wizard now?",
+                    "主目录下未找到 ~/turbo-fieldfare 官方项目，是否立即唤起初始化向导自动克隆并编译？"
+                )
+                alert.addButton(withTitle: l10n.tr("Run Setup Wizard", "立即克隆初始化"))
+                alert.addButton(withTitle: l10n.tr("Cancel", "取消"))
                 if alert.runModal() == .alertFirstButtonReturn {
-                    await manager.syncToLatest { msg in
-                        print(msg)
-                    }
+                    SetupAndRecoveryWindowController.shared.show(mode: .firstRun)
                 }
+                return
+            }
+
+            let alert = NSAlert()
+            alert.messageText = l10n.tr("Upstream Update Check", "版本同步检测")
+            if status.isUpToDate {
+                alert.informativeText = l10n.tr(
+                    "You are currently on the latest upstream version (\(status.localCommit)).\nWould you like to force-pull and re-compile anyway?",
+                    "当前已是官方最新主线版本 (\(status.localCommit))。\n是否仍然强制重新同步代码并重新编译？"
+                )
             } else {
-                let alert = NSAlert()
-                alert.messageText = "已是最新版本"
-                alert.informativeText = "当前本地版本 (\(status.localCommit)) 与官方 upstream 完全一致，无需更新。"
-                alert.addButton(withTitle: "好的")
-                alert.runModal()
+                alert.informativeText = l10n.tr(
+                    "New upstream commits detected!\nLocal: \(status.localCommit)\nRemote: \(status.remoteCommit)\nPull and re-compile now?",
+                    "检测到官方主线有新提交！\n本地: \(status.localCommit)\n远端: \(status.remoteCommit)\n是否立即拉取并重新编译？"
+                )
+            }
+            alert.addButton(withTitle: l10n.tr("Sync & Recompile", "拉取并重新编译"))
+            alert.addButton(withTitle: l10n.tr("Cancel", "取消"))
+
+            if alert.runModal() == .alertFirstButtonReturn {
+                SetupAndRecoveryWindowController.shared.show(mode: .recovery)
             }
         }
     }
 
     @objc private func quitApp() {
-        // 用户明确要求：退出时连同推理服务一起停止
         manager.stopService()
         NSApp.terminate(nil)
     }

@@ -9,16 +9,13 @@ public enum WizardMode {
 public final class SetupAndRecoveryWindowController: NSWindowController {
     public static let shared = SetupAndRecoveryWindowController()
 
-    private var currentHostingView: NSHostingView<SetupAndRecoveryView>?
-
     private init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 680, height: 580),
+            contentRect: NSRect(x: 0, y: 0, width: 700, height: 600),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
-        window.title = "TurboFieldfare 初始化与自愈中心"
         window.center()
         window.isReleasedWhenClosed = false
         window.setFrameAutosaveName("TurboFieldfareSetupAndRecoveryWindow")
@@ -31,7 +28,11 @@ public final class SetupAndRecoveryWindowController: NSWindowController {
     }
 
     public func show(mode: WizardMode) {
-        self.window?.title = (mode == .firstRun) ? "欢迎使用 TurboFieldfare (首次环境初始化)" : "TurboFieldfare 服务故障恢复中心"
+        let l10n = LocalizationManager.shared
+        self.window?.title = (mode == .firstRun)
+            ? l10n.tr("Welcome to TurboFieldfare (First-Run Setup)", "欢迎使用 TurboFieldfare (首次环境初始化)")
+            : l10n.tr("TurboFieldfare Troubleshooting & Recovery", "TurboFieldfare 服务故障恢复中心")
+
         let view = SetupAndRecoveryView(mode: mode, onDismiss: { [weak self] in
             self?.window?.close()
         })
@@ -47,6 +48,8 @@ public struct SetupAndRecoveryView: View {
     public let onDismiss: () -> Void
 
     @ObservedObject private var manager = ServiceManager.shared
+    @ObservedObject private var l10n = LocalizationManager.shared
+
     @State private var isRunningTask: Bool = false
     @State private var taskFinished: Bool = false
     @State private var consoleOutput: [String] = []
@@ -79,7 +82,7 @@ public struct SetupAndRecoveryView: View {
                 .padding(16)
                 .background(Color(NSColor.windowBackgroundColor))
         }
-        .frame(minWidth: 640, minHeight: 520)
+        .frame(minWidth: 660, minHeight: 540)
     }
 
     // MARK: - 顶部 Header
@@ -92,13 +95,15 @@ public struct SetupAndRecoveryView: View {
                 .foregroundColor(mode == .firstRun ? .accentColor : .orange)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(mode == .firstRun ? "TurboFieldfare 新设备初始化向导" : "TurboFieldfare 服务故障自愈与恢复")
+                Text(mode == .firstRun
+                     ? l10n.tr("New Mac Setup Wizard", "TurboFieldfare 新设备初始化向导")
+                     : l10n.tr("Service Troubleshooting & Recovery", "TurboFieldfare 服务故障自愈与恢复"))
                     .font(.title2)
                     .fontWeight(.bold)
 
                 Text(mode == .firstRun
-                     ? "在新的 Mac 上一键克隆官方代码、编译推理服务并自动下载 Gemma 4 模型权重。"
-                     : "当服务因文件缺失、损坏或环境异常启动失败时，一键安全自愈恢复运行环境。")
+                     ? l10n.tr("One-click setup on a new Mac: clones upstream repo, compiles the server, and downloads Gemma 4 model weights.", "在新的 Mac 上一键克隆官方代码、编译推理服务并自动下载 Gemma 4 模型权重。")
+                     : l10n.tr("Safely recovers the runtime environment when files are damaged, corrupted, or the service fails to launch.", "当服务因文件缺失、损坏或环境异常启动失败时，一键安全自愈恢复运行环境。"))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -116,25 +121,46 @@ public struct SetupAndRecoveryView: View {
                         .foregroundColor(.blue)
                         .font(.title3)
 
-                    Text("安全回收机制：重新下载前，原模型文件夹将被安全移入「macOS 系统废纸篓」，绝不直接强删，随时可在废纸篓中查找和恢复。")
-                        .font(.caption)
-                        .foregroundColor(.primary)
+                    Text(l10n.tr(
+                        "Safe Recovery: Before re-downloading, existing model files are moved to the macOS Trash (~/.Trash) rather than permanently deleted.",
+                        "安全回收机制：重新下载前，原模型文件夹将被安全移入「macOS 系统废纸篓」，绝不直接强删，随时可在废纸篓中查找和恢复。"
+                    ))
+                    .font(.caption)
+                    .foregroundColor(.primary)
                 }
                 .padding(10)
                 .background(Color.blue.opacity(0.1))
                 .cornerRadius(8)
             }
 
-            Text("执行流程与自动化检查:")
+            Text(l10n.tr("Automated Pipeline Steps:", "执行流程与自动化检查:"))
                 .font(.caption)
                 .fontWeight(.bold)
                 .foregroundColor(.secondary)
 
             HStack(alignment: .top, spacing: 16) {
-                stepItem(index: 1, title: "官方本体仓库", subtitle: mode == .firstRun ? "克隆到 ~/turbo-fieldfare" : "拉取对齐官方最新代码")
-                stepItem(index: 2, title: "编译二进制", subtitle: "构建 TurboFieldfareServer")
-                stepItem(index: 3, title: "下载模型权重", subtitle: "约 14.3GB，支持断点续传")
-                stepItem(index: 4, title: "启动并就绪", subtitle: "健康检查并常驻状态栏")
+                stepItem(
+                    index: 1,
+                    title: l10n.tr("Upstream Repo", "官方本体仓库"),
+                    subtitle: mode == .firstRun
+                        ? l10n.tr("Clone to ~/turbo-fieldfare", "克隆到 ~/turbo-fieldfare")
+                        : l10n.tr("Sync latest main branch", "拉取对齐官方最新代码")
+                )
+                stepItem(
+                    index: 2,
+                    title: l10n.tr("Compile Binary", "编译二进制"),
+                    subtitle: l10n.tr("Build TurboFieldfareServer", "构建 TurboFieldfareServer")
+                )
+                stepItem(
+                    index: 3,
+                    title: l10n.tr("Model Weights", "下载模型权重"),
+                    subtitle: l10n.tr("~14.3GB with resume support", "约 14.3GB，支持断点续传")
+                )
+                stepItem(
+                    index: 4,
+                    title: l10n.tr("Launch & Verify", "启动并就绪"),
+                    subtitle: l10n.tr("Health probe HTTP 200", "健康检查并常驻状态栏")
+                )
             }
         }
     }
@@ -166,8 +192,8 @@ public struct SetupAndRecoveryView: View {
                 LazyVStack(alignment: .leading, spacing: 3) {
                     if consoleOutput.isEmpty {
                         Text(mode == .firstRun
-                             ? "等待开始... 点击下方「开始一键初始化」按钮，将自动执行克隆、编译与模型下载。"
-                             : "等待开始... 点击下方「开始故障恢复」按钮，将自动排查、安全移入废纸篓并重新构建环境。")
+                             ? l10n.tr("Ready. Click 'Start Setup' below to begin cloning, building, and downloading weights.", "等待开始... 点击下方「开始一键初始化」按钮，将自动执行克隆、编译与模型下载。")
+                             : l10n.tr("Ready. Click 'Start Recovery' below to inspect, trash damaged files, and restore the service.", "等待开始... 点击下方「开始故障恢复」按钮，将自动排查、安全移入废纸篓并重新构建环境。"))
                             .font(.system(.caption, design: .monospaced))
                             .foregroundColor(.secondary)
                             .padding(14)
@@ -208,7 +234,7 @@ public struct SetupAndRecoveryView: View {
 
             if taskFinished {
                 Button(action: onDismiss) {
-                    Text("完成并进入状态栏")
+                    Text(l10n.tr("Finish & Dock to Menu Bar", "完成并进入状态栏"))
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.green)
@@ -216,18 +242,20 @@ public struct SetupAndRecoveryView: View {
                 HStack(spacing: 8) {
                     ProgressView()
                         .controlSize(.small)
-                    Text("正在执行初始化中，请勿关闭窗口...")
+                    Text(l10n.tr("Running pipeline, please keep this window open...", "正在执行初始化中，请勿关闭窗口..."))
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
             } else {
-                Button("取消") {
+                Button(l10n.tr("Cancel", "取消")) {
                     onDismiss()
                 }
                 .buttonStyle(.bordered)
 
                 Button(action: startPipeline) {
-                    Text(mode == .firstRun ? "🚀 开始一键初始化" : "🛠️ 开始安全故障恢复")
+                    Text(mode == .firstRun
+                         ? ("🚀 " + l10n.tr("Start Setup", "开始一键初始化"))
+                         : ("🛠️ " + l10n.tr("Start Recovery", "开始安全故障恢复")))
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(mode == .firstRun ? .accentColor : .orange)
@@ -257,7 +285,7 @@ public struct SetupAndRecoveryView: View {
             } catch {
                 isRunningTask = false
                 errorMessage = error.localizedDescription
-                appendOutput("❌ 流程中断: \(error.localizedDescription)\n")
+                appendOutput("❌ " + l10n.tr("Interrupted: \(error.localizedDescription)\n", "流程中断: \(error.localizedDescription)\n"))
             }
         }
     }
@@ -288,4 +316,3 @@ public struct SetupAndRecoveryView: View {
         return Color(red: 0.86, green: 0.86, blue: 0.88)
     }
 }
-
