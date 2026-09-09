@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="App/Resources/AppIcon.icns" alt="TurboFieldfareBar App Icon" width="128">
+  <img src="App/Resources/AppIcon.png" alt="TurboFieldfareBar App Icon" width="128">
 </p>
 
 <h1 align="center">TurboFieldfareBar & Manager</h1>
