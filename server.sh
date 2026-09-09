@@ -14,36 +14,51 @@
 # ⚙️ TurboFieldfareServer 运行配置区
 # ==============================================================================
 
+# 加载由 TurboFieldfareBar GUI 或用户配置的环境变量文件（若存在）
+CONFIG_ENV_FILE="${TURBO_CONFIG_FILE:-$HOME/Library/Application Support/TurboFieldfare/config.env}"
+if [ -f "$CONFIG_ENV_FILE" ]; then
+    # shellcheck source=/dev/null
+    source "$CONFIG_ENV_FILE"
+fi
+
 # 1. 监听端口 (默认: 1235)
 PORT=1235
+PORT="${TURBO_PORT:-${PORT:-1235}}"
 
 # 2. 最大上下文长度 (支持: 4096, 8192, 16384, 32768, 65536)
 #    - 16384 (16K): 默认值，日常多轮图文对话与低内存占用平衡
 #    - 32768 (32K): 推荐值，适合长文本分析与大量图片输入
 #    - 65536 (64K): 极限值，适合超长代码库/长文档深度分析
 MAX_CONTEXT=32768
+MAX_CONTEXT="${TURBO_MAX_CONTEXT:-${MAX_CONTEXT:-32768}}"
 
 # 3. 专家缓存槽位数 (每层保留专家数，支持: 8, 16, 24, 32)
 #    - 16: 默认值 (约占 2 GB 内存)
 #    - 24: 推荐值 (约占 3~3.5 GB 内存，大幅减少磁盘读取)
 #    - 32: 最大缓存 (约占 4~4.5 GB 内存，极高内存命中率，最少磁盘 I/O)
 EXPERT_CACHE_SLOTS=24
+EXPERT_CACHE_SLOTS="${TURBO_EXPERT_CACHE_SLOTS:-${EXPERT_CACHE_SLOTS:-24}}"
 
 # 4. 专家缓存淘汰策略 (支持: lfu, lru)
 EXPERT_CACHE_POLICY="lfu"
+EXPERT_CACHE_POLICY="${TURBO_EXPERT_CACHE_POLICY:-${EXPERT_CACHE_POLICY:-lfu}}"
 
 # 5. 分块 Prompt 预热 (支持: on, off；开启后显著加速 Prompt/图片处理)
 PREFILL="on"
+PREFILL="${TURBO_PREFILL:-${PREFILL:-on}}"
 
 # 6. Prefill 分块大小 (支持: 32, 64, 128, 256, auto)
 #    - auto (或 256): 推荐值 (v0.7.2+)，服务端自动上限 256，长 Prompt 预热提速 ~16%，仅多占 ~16MB 显存
 PREFILL_CHUNK_TOKENS="auto"
+PREFILL_CHUNK_TOKENS="${TURBO_PREFILL_CHUNK_TOKENS:-${PREFILL_CHUNK_TOKENS:-auto}}"
 
 # 7. 视觉模块常驻策略 (支持: on-demand 按需调度, keep-ready 始终常驻显存)
 VISION_RESIDENCY="on-demand"
+VISION_RESIDENCY="${TURBO_VISION_RESIDENCY:-${VISION_RESIDENCY:-on-demand}}"
 
 # 8. KV 缓存复用模式 (支持: single-prefix 开启单前缀复用, off 关闭)
 PROMPT_CACHE_MODE="single-prefix"
+PROMPT_CACHE_MODE="${TURBO_PROMPT_CACHE_MODE:-${PROMPT_CACHE_MODE:-single-prefix}}"
 
 # 9. 路径与本体配置 (默认指向用户主目录下的本体 ~/turbo-fieldfare)
 TURBO_DIR="${TURBO_FIELDFARE_DIR:-$HOME/turbo-fieldfare}"

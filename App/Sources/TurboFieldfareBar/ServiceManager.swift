@@ -45,8 +45,10 @@ public final class ServiceManager: ObservableObject {
     @Published public private(set) var state: ServiceState = .stopped
     @Published public private(set) var lastLogLines: [String] = []
     @Published public private(set) var repoStatus: RepoCheckResult?
+    @Published public var config: ServerConfiguration
 
     public let port = 1235
+    public var port: Int { config.port }
     public let homeDir: URL
     public let repoDir: URL
     public let modelDir: URL
@@ -58,6 +60,10 @@ public final class ServiceManager: ObservableObject {
     private var monitorTimer: Timer?
 
     private init() {
+        let loadedConfig = ServerConfiguration.load()
+        loadedConfig.exportToEnvFile()
+        self.config = loadedConfig
+
         self.homeDir = FileManager.default.homeDirectoryForCurrentUser
         self.repoDir = homeDir.appendingPathComponent("turbo-fieldfare")
         self.modelDir = repoDir.appendingPathComponent("scratch/gemma4.gturbo")
@@ -190,6 +196,14 @@ public final class ServiceManager: ObservableObject {
         runScriptCommand("restart")
     }
 
+    public func applyConfiguration(_ newConfig: ServerConfiguration, restartIfRunning: Bool = false) {
+        self.config = newConfig
+        newConfig.save()
+        if restartIfRunning && self.state.isRunning {
+            restartService()
+        }
+    }
+
     @discardableResult
     private func runScriptCommand(_ action: String) -> (output: String, exitCode: Int32) {
         guard FileManager.default.fileExists(atPath: serverScript.path) else {
@@ -201,6 +215,9 @@ public final class ServiceManager: ObservableObject {
         
         var env = ProcessInfo.processInfo.environment
         env["TURBO_FIELDFARE_DIR"] = repoDir.path
+        for (k, v) in config.environmentDictionary {
+            env[k] = v
+        }
         process.environment = env
 
         let pipe = Pipe()
