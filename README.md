@@ -86,15 +86,15 @@ Configure runtime parameters visually without editing shell scripts:
 
 The backend inference engine has strict hardware and OS prerequisites defined by the official TurboFieldfare project:
 
-| Requirement          | Specification                                | Notes                                                                                                                              |
-| :------------------- | :------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------- |
-| **Architecture**     | **Apple Silicon (arm64)**                    | M-series Macs only. Intel x86_64 is **not supported**.                                                                             |
-| **Processor**        | **Apple M1 / M2 / M3 / M4 / M5**             | M1 supports text-only inference. **M2 or newer is required for the Multimodal Vision Companion Pack**.                             |
-| **Operating System** | **macOS 26+ (Darwin 26~27)** | Requires Metal 4 support. Older macOS releases are unsupported. |
-| **Toolchain**        | **Xcode 26+ & Swift 6.2+**                   | Required for compiling `TurboFieldfareServer` and the repacker.                                                                    |
-| **Memory (RAM)**     | **8 GB unified memory or more**              | Successfully validated on base 8 GB M2 MacBook Air.                                                                                |
-| **Disk Storage**     | **~16 GB free SSD space**                    | 14.3 GB for Gemma 4 text model + 1.1 GB for image vision companion pack.                                                           |
-| **Network**          | **Active Internet connection**               | Needed on first run to stream Hugging Face weights.                                                                                |
+| Requirement          | Specification                    | Notes                                                                                                  |
+| :------------------- | :------------------------------- | :----------------------------------------------------------------------------------------------------- |
+| **Architecture**     | **Apple Silicon (arm64)**        | M-series Macs only. Intel x86_64 is **not supported**.                                                 |
+| **Processor**        | **Apple M1 / M2 / M3 / M4 / M5** | M1 supports text-only inference. **M2 or newer is required for the Multimodal Vision Companion Pack**. |
+| **Operating System** | **macOS 26+ (Darwin 26~27)**     | Requires Metal 4 support. Older macOS releases are unsupported.                                        |
+| **Toolchain**        | **Xcode 26+ & Swift 6.2+**       | Required for compiling `TurboFieldfareServer` and the repacker.                                        |
+| **Memory (RAM)**     | **8 GB unified memory or more**  | Successfully validated on base 8 GB M2 MacBook Air.                                                    |
+| **Disk Storage**     | **~16 GB free SSD space**        | 14.3 GB for Gemma 4 text model + 1.1 GB for image vision companion pack.                               |
+| **Network**          | **Active Internet connection**   | Needed on first run to stream Hugging Face weights.                                                    |
 
 ---
 
@@ -198,15 +198,15 @@ cd ~/Projects/turbo-fieldfare-manager
 
 底层推理引擎对硬件及 macOS 系统环境有明确的官方硬性要求：
 
-| 维度           | 要求规格                                     | 说明                                                                                    |
-| :------------- | :------------------------------------------- | :-------------------------------------------------------------------------------------- |
-| **芯片架构**   | **Apple Silicon (arm64)**                    | 仅支持苹果 M 系列自研芯片，**不支持 Intel x86 架构**。                                  |
-| **处理器型号** | **Apple M1 / M2 / M3 / M4 / M5**             | M1 仅支持纯文本推理；**多模态图像视觉包（Vision Pack）必须要求 M2 或更新的芯片**。      |
-| **系统版本** | **macOS 26+ (Darwin 26~27)** | 深度依赖 **Metal 4**，旧版 macOS 无法编译和运行。 |
-| **编译工具链** | **Xcode 26+ 及 Swift 6.2+**                  | 用于编译 `TurboFieldfareServer` 及 Repacker 工具。                                      |
-| **统一内存**   | **8 GB 及以上**                              | 已在 8 GB 内存的 M2 MacBook Air 基准测试通过。                                          |
-| **存储空间**   | **约 16 GB 可用 SSD 空间**                   | 文本模型约 14.3 GB，图像伴生包约 1.1 GB。                                               |
-| **网络环境**   | **可用互联网连接**                           | 首次需要从 Hugging Face 流式下载模型权重。                                              |
+| 维度           | 要求规格                         | 说明                                                                               |
+| :------------- | :------------------------------- | :--------------------------------------------------------------------------------- |
+| **芯片架构**   | **Apple Silicon (arm64)**        | 仅支持苹果 M 系列自研芯片，**不支持 Intel x86 架构**。                             |
+| **处理器型号** | **Apple M1 / M2 / M3 / M4 / M5** | M1 仅支持纯文本推理；**多模态图像视觉包（Vision Pack）必须要求 M2 或更新的芯片**。 |
+| **系统版本**   | **macOS 26+ (Darwin 26~27)**     | 深度依赖 **Metal 4**，旧版 macOS 无法编译和运行。                                  |
+| **编译工具链** | **Xcode 26+ 及 Swift 6.2+**      | 用于编译 `TurboFieldfareServer` 及 Repacker 工具。                                 |
+| **统一内存**   | **8 GB 及以上**                  | 已在 8 GB 内存的 M2 MacBook Air 基准测试通过。                                     |
+| **存储空间**   | **约 16 GB 可用 SSD 空间**       | 文本模型约 14.3 GB，图像伴生包约 1.1 GB。                                          |
+| **网络环境**   | **可用互联网连接**               | 首次需要从 Hugging Face 流式下载模型权重。                                         |
 
 ---
 
