@@ -51,7 +51,7 @@ cat << 'EOF' > "$OUTPUT_APP/Contents/Info.plist"
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
-    <string>13.0</string>
+    <string>26.0</string>
     <!-- LSUIElement 为 true 表示纯菜单栏辅助应用：不占用 Dock、无默认主窗口 -->
     <key>LSUIElement</key>
     <true/>
