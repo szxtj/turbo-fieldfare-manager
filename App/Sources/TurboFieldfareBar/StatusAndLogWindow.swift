@@ -138,6 +138,14 @@ public struct StatusAndLogView: View {
             }
             .buttonStyle(.bordered)
 
+            // 偏好设置
+            Button(action: {
+                SettingsWindowController.shared.showAndActivate()
+            }) {
+                Label("运行参数设置", systemImage: "gearshape")
+            }
+            .buttonStyle(.bordered)
+
             if let banner = copyBanner {
                 Text(banner)
                     .font(.caption)

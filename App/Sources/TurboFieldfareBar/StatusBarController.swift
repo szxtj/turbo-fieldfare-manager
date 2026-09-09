@@ -132,6 +132,14 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
         showLogItem.target = self
         menu.addItem(showLogItem)
 
+        let settingsItem = NSMenuItem(
+            title: "⚙️ 服务偏好设置与运行参数...",
+            action: #selector(showSettingsWindow),
+            keyEquivalent: ","
+        )
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
         menu.addItem(NSMenuItem.separator())
 
         // 3. 服务控制项
@@ -217,6 +225,10 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
 
     @objc private func showStatusAndLogWindow() {
         StatusAndLogWindowController.shared.showAndActivate()
+    }
+
+    @objc private func showSettingsWindow() {
+        SettingsWindowController.shared.showAndActivate()
     }
 
     @objc private func showRecoveryWizard() {
