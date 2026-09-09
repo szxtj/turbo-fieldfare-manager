@@ -308,7 +308,6 @@ public struct SettingsView: View {
     // MARK: - 操作逻辑
     private func restoreDefaults() {
         self.draftConfig = .default
-        self.portString = "\(.default.port)"
         self.portString = "\(ServerConfiguration.default.port)"
         saveOnly(message: "已重置为官方推荐默认参数并保存！")
     }

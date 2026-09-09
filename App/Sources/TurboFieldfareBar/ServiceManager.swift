@@ -47,7 +47,6 @@ public final class ServiceManager: ObservableObject {
     @Published public private(set) var repoStatus: RepoCheckResult?
     @Published public var config: ServerConfiguration
 
-    public let port = 1235
     public var port: Int { config.port }
     public let homeDir: URL
     public let repoDir: URL
