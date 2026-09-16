@@ -60,7 +60,14 @@ VISION_RESIDENCY="${TURBO_VISION_RESIDENCY:-${VISION_RESIDENCY:-on-demand}}"
 PROMPT_CACHE_MODE="single-prefix"
 PROMPT_CACHE_MODE="${TURBO_PROMPT_CACHE_MODE:-${PROMPT_CACHE_MODE:-single-prefix}}"
 
-# 9. 路径与本体配置 (默认指向用户主目录下的本体 ~/turbo-fieldfare)
+# 9. 深度思考推理策略 (支持: default 由前端控制, on 始终开启, off 完全关闭)
+#    - default: 默认基准，由客户端/前端请求按需控制
+#    - on:      强制所有对话展开思考 (推荐 Open WebUI 等客户端免配置使用)
+#    - off:     关闭思考模式，以最高速度直接生成正式回复
+THINKING="default"
+THINKING="${TURBO_THINKING:-${THINKING:-default}}"
+
+# 10. 路径与本体配置 (默认指向用户主目录下的本体 ~/turbo-fieldfare)
 TURBO_DIR="${TURBO_FIELDFARE_DIR:-$HOME/turbo-fieldfare}"
 PROJECT_DIR="$TURBO_DIR"
 MODEL_PATH="$PROJECT_DIR/scratch/gemma4.gturbo"
@@ -148,6 +155,7 @@ start() {
     echo "   ├─ 专家缓存槽位: $EXPERT_CACHE_SLOTS (策略: $EXPERT_CACHE_POLICY)"
     echo "   ├─ Prefill 分块: $PREFILL_CHUNK_TOKENS"
     echo "   ├─ 视觉模块: $([ -d "$VISION_PATH" ] && echo "已挂载 ($VISION_RESIDENCY)" || echo "未安装")"
+    echo "   ├─ 深度思考: $THINKING"
     echo "   └─ 模型路径: $MODEL_PATH"
 
     nohup "$BINARY" \
@@ -159,6 +167,7 @@ start() {
         --prefill "$PREFILL" \
         --prefill-chunk-tokens "$PREFILL_CHUNK_TOKENS" \
         --prompt-cache-mode "$PROMPT_CACHE_MODE" \
+        --thinking "$THINKING" \
         "${VISION_FLAGS[@]}" > "$LOG_FILE" 2>&1 &
 
     local pid=$!
@@ -248,6 +257,7 @@ status() {
         echo "   ├─ 上下文容量: $MAX_CONTEXT"
         echo "   ├─ 专家缓存槽位: $EXPERT_CACHE_SLOTS ($EXPERT_CACHE_POLICY)"
         echo "   ├─ Prefill 分块: $PREFILL_CHUNK_TOKENS"
+        echo "   ├─ 深度思考: $THINKING"
         echo "   └─ API 接口: http://127.0.0.1:$PORT/v1"
         
         # 尝试进行健康检查

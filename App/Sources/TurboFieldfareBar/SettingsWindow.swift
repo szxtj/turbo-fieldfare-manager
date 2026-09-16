@@ -312,6 +312,24 @@ public struct SettingsView: View {
                             .foregroundColor(.secondary)
                     }
                 }
+
+                GridRow {
+                    Text(l10n.tr("Thinking Mode:", "深度思考模式:"))
+                        .font(.subheadline)
+                        .gridColumnAlignment(.trailing)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Picker("", selection: $draftConfig.thinking) {
+                            Text(l10n.tr("default (Client Controlled)", "default (默认，由前端控制)")).tag("default")
+                            Text(l10n.tr("on (Always Think)", "on (始终开启思考)")).tag("on")
+                            Text(l10n.tr("off (Disabled)", "off (完全关闭)")).tag("off")
+                        }
+                        .pickerStyle(SegmentedPickerStyle())
+                        .frame(width: 380)
+                        Text(l10n.tr("default: Driven by frontend requests. on: Always forces reasoning. off: Disables thinking for maximum speed.", "default: 由前端请求按需控制；on: 强制所有请求深度思考；off: 关闭思考以最高速度响应。"))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
             }
         }
     }

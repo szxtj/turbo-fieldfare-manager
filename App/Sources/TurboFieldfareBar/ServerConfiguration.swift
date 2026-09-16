@@ -25,6 +25,9 @@ public struct ServerConfiguration: Codable, Equatable {
     // 8. KV 缓存复用模式 (single-prefix, off)
     public var promptCacheMode: String
 
+    // 9. 深度思考推理策略 (default, on, off)
+    public var thinking: String
+
     public init(
         port: Int = 1235,
         maxContext: Int = 32768,
@@ -33,7 +36,8 @@ public struct ServerConfiguration: Codable, Equatable {
         prefill: String = "on",
         prefillChunkTokens: String = "auto",
         visionResidency: String = "on-demand",
-        promptCacheMode: String = "single-prefix"
+        promptCacheMode: String = "single-prefix",
+        thinking: String = "default"
     ) {
         self.port = port
         self.maxContext = maxContext
@@ -43,6 +47,26 @@ public struct ServerConfiguration: Codable, Equatable {
         self.prefillChunkTokens = prefillChunkTokens
         self.visionResidency = visionResidency
         self.promptCacheMode = promptCacheMode
+        self.thinking = thinking
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case port, maxContext, expertCacheSlots, expertCachePolicy
+        case prefill, prefillChunkTokens, visionResidency, promptCacheMode
+        case thinking
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        port = try container.decode(Int.self, forKey: .port)
+        maxContext = try container.decode(Int.self, forKey: .maxContext)
+        expertCacheSlots = try container.decode(Int.self, forKey: .expertCacheSlots)
+        expertCachePolicy = try container.decode(String.self, forKey: .expertCachePolicy)
+        prefill = try container.decode(String.self, forKey: .prefill)
+        prefillChunkTokens = try container.decode(String.self, forKey: .prefillChunkTokens)
+        visionResidency = try container.decode(String.self, forKey: .visionResidency)
+        promptCacheMode = try container.decode(String.self, forKey: .promptCacheMode)
+        thinking = try container.decodeIfPresent(String.self, forKey: .thinking) ?? "default"
     }
 
     /// 官方与脚本默认推荐配置基准
@@ -54,7 +78,8 @@ public struct ServerConfiguration: Codable, Equatable {
         prefill: "on",
         prefillChunkTokens: "auto",
         visionResidency: "on-demand",
-        promptCacheMode: "single-prefix"
+        promptCacheMode: "single-prefix",
+        thinking: "default"
     )
 
     private static let userDefaultsKey = "TurboFieldfare_ServerConfiguration"
@@ -101,6 +126,7 @@ public struct ServerConfiguration: Codable, Equatable {
         export TURBO_PREFILL_CHUNK_TOKENS="\(prefillChunkTokens)"
         export TURBO_VISION_RESIDENCY="\(visionResidency)"
         export TURBO_PROMPT_CACHE_MODE="\(promptCacheMode)"
+        export TURBO_THINKING="\(thinking)"
         """
         try? envContent.write(to: ServerConfiguration.envConfigFile, atomically: true, encoding: .utf8)
     }
@@ -115,7 +141,8 @@ public struct ServerConfiguration: Codable, Equatable {
             "TURBO_PREFILL": prefill,
             "TURBO_PREFILL_CHUNK_TOKENS": prefillChunkTokens,
             "TURBO_VISION_RESIDENCY": visionResidency,
-            "TURBO_PROMPT_CACHE_MODE": promptCacheMode
+            "TURBO_PROMPT_CACHE_MODE": promptCacheMode,
+            "TURBO_THINKING": thinking
         ]
     }
 }

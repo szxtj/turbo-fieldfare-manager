@@ -161,6 +161,32 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
         settingsItem.target = self
         menu.addItem(settingsItem)
 
+        // 思考模式快捷切换项
+        let thinkingMenuItem = NSMenuItem(
+            title: "🧠 " + l10n.tr("Thinking Mode", "思考模式"),
+            action: nil,
+            keyEquivalent: ""
+        )
+        let thinkingSubMenu = NSMenu()
+        let thinkingModes: [(key: String, en: String, zh: String)] = [
+            ("default", "default (Client Controlled)", "default (默认，由前端控制)"),
+            ("on", "on (Always Think)", "on (始终开启思考)"),
+            ("off", "off (Disabled)", "off (完全关闭)")
+        ]
+        for mode in thinkingModes {
+            let item = NSMenuItem(
+                title: l10n.tr(mode.en, mode.zh),
+                action: #selector(changeThinkingMode(_:)),
+                keyEquivalent: ""
+            )
+            item.representedObject = mode.key
+            item.state = (manager.config.thinking == mode.key) ? .on : .off
+            item.target = self
+            thinkingSubMenu.addItem(item)
+        }
+        thinkingMenuItem.submenu = thinkingSubMenu
+        menu.addItem(thinkingMenuItem)
+
         menu.addItem(NSMenuItem.separator())
 
         // 4. 服务基础控制项
@@ -247,6 +273,14 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
 
     @objc private func showSettingsWindow() {
         SettingsWindowController.shared.showAndActivate()
+    }
+
+    @objc private func changeThinkingMode(_ sender: NSMenuItem) {
+        guard let newMode = sender.representedObject as? String,
+              newMode != manager.config.thinking else { return }
+        var updated = manager.config
+        updated.thinking = newMode
+        manager.applyConfiguration(updated, restartIfRunning: manager.state.isRunning)
     }
 
     @objc private func showRecoveryWizard() {
