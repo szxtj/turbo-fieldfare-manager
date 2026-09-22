@@ -174,11 +174,28 @@ public struct SettingsView: View {
                             Text(l10n.tr("8,192 (8K) - Lightweight", "8,192 (8K) - 轻量日常")).tag(8192)
                             Text(l10n.tr("16,384 (16K) - Upstream default", "16,384 (16K) - 官方默认")).tag(16384)
                             Text(l10n.tr("32,768 (32K) - Recommended (Docs & Vision)", "32,768 (32K) - 推荐，适合长文与图文")).tag(32768)
-                            Text(l10n.tr("65,536 (64K) - Maximum context", "65,536 (64K) - 极限超长上下文")).tag(65536)
+                            Text(l10n.tr("65,536 (64K) - Extended context", "65,536 (64K) - 超长文档与代码")).tag(65536)
+                            Text(l10n.tr("98,304 (96K) - Ultra-long context", "98,304 (96K) - 超长上下文")).tag(98304)
+                            Text(l10n.tr("131,072 (128K) - Massive context (~3 GB KV)", "131,072 (128K) - 海量长文本 (~3GB KV)")).tag(131072)
+                            Text(l10n.tr("196,608 (192K) - Extreme context (~4.5 GB KV)", "196,608 (192K) - 极度长文 (~4.5GB KV)")).tag(196608)
+                            Text(l10n.tr("262,144 (256K) - Maximum position limit (~5.6 GB KV)", "262,144 (256K) - 模型硬件极限 (~5.6GB KV)")).tag(262144)
                         }
                         .labelsHidden()
-                        .frame(width: 340)
-                        Text(l10n.tr("Larger context windows increase unified memory consumption. 32K is recommended.", "增大上下文会相应提升显存/统一内存消耗，推荐 32K。"))
+                        .frame(width: 380)
+                        Text(l10n.tr("Upstream v0.9.0 supports up to 256K context. Larger context windows increase KV memory.", "官方 v0.9.0 支持最高 256K 极限上下文。增大上下文会线性增加 FP16 KV 显存。"))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                GridRow {
+                    Text(l10n.tr("Memory Budget:", "显存预算保护:"))
+                        .font(.subheadline)
+                        .gridColumnAlignment(.trailing)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Toggle(l10n.tr("Bypass Host Memory Check (Force Launch)", "允许超出物理显存预算强制启动"), isOn: $draftConfig.allowUnbackedContext)
+                            .toggleStyle(.checkbox)
+                        Text(l10n.tr("Sets TURBO_FIELDFARE_ALLOW_UNBACKED_CONTEXT=1. Enable if upstream refuses to launch 128K/256K on your Mac.", "对应 TURBO_FIELDFARE_ALLOW_UNBACKED_CONTEXT=1。在统一内存较紧凑的设备上强启 128K/256K 超长上下文时需勾选此项。"))
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }

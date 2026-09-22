@@ -25,10 +25,11 @@ fi
 PORT=1235
 PORT="${TURBO_PORT:-${PORT:-1235}}"
 
-# 2. 最大上下文长度 (支持: 4096, 8192, 16384, 32768, 65536)
-#    - 16384 (16K): 默认值，日常多轮图文对话与低内存占用平衡
+# 2. 最大上下文长度 (支持: 4096, 8192, 16384, 32768, 65536, 98304, 131072, 196608, 262144)
+#    - 16384 (16K): 官方默认值，日常多轮图文对话与低内存占用平衡
 #    - 32768 (32K): 推荐值，适合长文本分析与大量图片输入
-#    - 65536 (64K): 极限值，适合超长代码库/长文档深度分析
+#    - 65536 (64K): 进阶长文，适合超长代码库/长文档深度分析
+#    - 131072 (128K) / 262144 (256K): 极限超长上下文 (v0.9.0+)，需注意统一内存占用
 MAX_CONTEXT=32768
 MAX_CONTEXT="${TURBO_MAX_CONTEXT:-${MAX_CONTEXT:-32768}}"
 
@@ -67,7 +68,14 @@ PROMPT_CACHE_MODE="${TURBO_PROMPT_CACHE_MODE:-${PROMPT_CACHE_MODE:-single-prefix
 THINKING="default"
 THINKING="${TURBO_THINKING:-${THINKING:-default}}"
 
-# 10. 路径与本体配置 (默认指向用户主目录下的本体 ~/turbo-fieldfare)
+# 10. 显存准入强制覆盖 (支持: 0 遵循官方内存预算限制, 1 允许超出预算强制启动)
+#     - 0: 默认值，当所选上下文超出 Mac 物理内存安全预算时，服务端自动阻止启动以防卡顿
+#     - 1: 强制覆盖 (v0.9.0+)，强行拉起 128K/256K 超长上下文
+ALLOW_UNBACKED_CONTEXT=0
+ALLOW_UNBACKED_CONTEXT="${TURBO_FIELDFARE_ALLOW_UNBACKED_CONTEXT:-${ALLOW_UNBACKED_CONTEXT:-0}}"
+export TURBO_FIELDFARE_ALLOW_UNBACKED_CONTEXT="$ALLOW_UNBACKED_CONTEXT"
+
+# 11. 路径与本体配置 (默认指向用户主目录下的本体 ~/turbo-fieldfare)
 TURBO_DIR="${TURBO_FIELDFARE_DIR:-$HOME/turbo-fieldfare}"
 PROJECT_DIR="$TURBO_DIR"
 MODEL_PATH="$PROJECT_DIR/scratch/gemma4.gturbo"
@@ -152,6 +160,9 @@ start() {
     echo "🚀 正在后台启动 TurboFieldfare 服务..."
     echo "   ├─ 端口: $PORT"
     echo "   ├─ 上下文: $MAX_CONTEXT"
+    if [ "$ALLOW_UNBACKED_CONTEXT" = "1" ]; then
+        echo "   ├─ 显存准入: 已开启强制覆盖 (ALLOW_UNBACKED_CONTEXT=1)"
+    fi
     echo "   ├─ 专家缓存槽位: $EXPERT_CACHE_SLOTS (策略: $EXPERT_CACHE_POLICY)"
     echo "   ├─ Prefill 分块: $PREFILL_CHUNK_TOKENS"
     echo "   ├─ 视觉模块: $([ -d "$VISION_PATH" ] && echo "已挂载 ($VISION_RESIDENCY)" || echo "未安装")"

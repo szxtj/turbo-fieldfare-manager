@@ -4,7 +4,7 @@ public struct ServerConfiguration: Codable, Equatable {
     // 1. 监听端口 (默认: 1235)
     public var port: Int
     
-    // 2. 最大上下文长度 (4096, 8192, 16384, 32768, 65536)
+    // 2. 最大上下文长度 (4096, 8192, 16384, 32768, 65536, 98304, 131072, 196608, 262144)
     public var maxContext: Int
     
     // 3. 专家缓存槽位数 (8, 16, 24, 32)
@@ -28,6 +28,9 @@ public struct ServerConfiguration: Codable, Equatable {
     // 9. 深度思考推理策略 (default, on, off)
     public var thinking: String
 
+    // 10. 允许超出显存预算强制启动 (TURBO_FIELDFARE_ALLOW_UNBACKED_CONTEXT=1)
+    public var allowUnbackedContext: Bool
+
     public init(
         port: Int = 1235,
         maxContext: Int = 32768,
@@ -37,7 +40,8 @@ public struct ServerConfiguration: Codable, Equatable {
         prefillChunkTokens: String = "auto",
         visionResidency: String = "on-demand",
         promptCacheMode: String = "single-prefix",
-        thinking: String = "default"
+        thinking: String = "default",
+        allowUnbackedContext: Bool = false
     ) {
         self.port = port
         self.maxContext = maxContext
@@ -48,12 +52,13 @@ public struct ServerConfiguration: Codable, Equatable {
         self.visionResidency = visionResidency
         self.promptCacheMode = promptCacheMode
         self.thinking = thinking
+        self.allowUnbackedContext = allowUnbackedContext
     }
 
     enum CodingKeys: String, CodingKey {
         case port, maxContext, expertCacheSlots, expertCachePolicy
         case prefill, prefillChunkTokens, visionResidency, promptCacheMode
-        case thinking
+        case thinking, allowUnbackedContext
     }
 
     public init(from decoder: any Decoder) throws {
@@ -67,6 +72,7 @@ public struct ServerConfiguration: Codable, Equatable {
         visionResidency = try container.decode(String.self, forKey: .visionResidency)
         promptCacheMode = try container.decode(String.self, forKey: .promptCacheMode)
         thinking = try container.decodeIfPresent(String.self, forKey: .thinking) ?? "default"
+        allowUnbackedContext = try container.decodeIfPresent(Bool.self, forKey: .allowUnbackedContext) ?? false
     }
 
     /// 官方与脚本默认推荐配置基准
@@ -79,7 +85,8 @@ public struct ServerConfiguration: Codable, Equatable {
         prefillChunkTokens: "auto",
         visionResidency: "on-demand",
         promptCacheMode: "single-prefix",
-        thinking: "default"
+        thinking: "default",
+        allowUnbackedContext: false
     )
 
     private static let userDefaultsKey = "TurboFieldfare_ServerConfiguration"
@@ -127,6 +134,7 @@ public struct ServerConfiguration: Codable, Equatable {
         export TURBO_VISION_RESIDENCY="\(visionResidency)"
         export TURBO_PROMPT_CACHE_MODE="\(promptCacheMode)"
         export TURBO_THINKING="\(thinking)"
+        export TURBO_FIELDFARE_ALLOW_UNBACKED_CONTEXT=\(allowUnbackedContext ? "1" : "0")
         """
         try? envContent.write(to: ServerConfiguration.envConfigFile, atomically: true, encoding: .utf8)
     }
@@ -142,7 +150,8 @@ public struct ServerConfiguration: Codable, Equatable {
             "TURBO_PREFILL_CHUNK_TOKENS": prefillChunkTokens,
             "TURBO_VISION_RESIDENCY": visionResidency,
             "TURBO_PROMPT_CACHE_MODE": promptCacheMode,
-            "TURBO_THINKING": thinking
+            "TURBO_THINKING": thinking,
+            "TURBO_FIELDFARE_ALLOW_UNBACKED_CONTEXT": allowUnbackedContext ? "1" : "0"
         ]
     }
 }
