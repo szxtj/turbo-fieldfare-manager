@@ -347,6 +347,25 @@ public struct SettingsView: View {
                             .foregroundColor(.secondary)
                     }
                 }
+
+                GridRow {
+                    Text(l10n.tr("Read Optimization:", "自适应读优化:"))
+                        .font(.subheadline)
+                        .gridColumnAlignment(.trailing)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Picker("", selection: $draftConfig.rdadvise) {
+                            Text(l10n.tr("adaptive (Adaptive prefetch, recommended)", "adaptive (自适应预取，推荐)")).tag("adaptive")
+                            Text(l10n.tr("bounded (Bounded prefetch)", "bounded (受限预取)")).tag("bounded")
+                            Text(l10n.tr("default (System default)", "default (系统预取)")).tag("default")
+                            Text(l10n.tr("off (Disabled)", "off (关闭)")).tag("off")
+                        }
+                        .labelsHidden()
+                        .frame(width: 320)
+                        Text(l10n.tr("adaptive: Intelligently pre-caches routed experts from SSD, boosting token decode speed.", "adaptive: 智能预取 SSD 专家权重，大幅降低 I/O 阻塞并显著提升解码速率。"))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
             }
         }
     }

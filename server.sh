@@ -75,7 +75,15 @@ ALLOW_UNBACKED_CONTEXT=0
 ALLOW_UNBACKED_CONTEXT="${TURBO_FIELDFARE_ALLOW_UNBACKED_CONTEXT:-${ALLOW_UNBACKED_CONTEXT:-0}}"
 export TURBO_FIELDFARE_ALLOW_UNBACKED_CONTEXT="$ALLOW_UNBACKED_CONTEXT"
 
-# 11. 路径与本体配置 (默认指向用户主目录下的本体 ~/turbo-fieldfare)
+# 11. 自适应读优化 / 专家预取策略 (支持: adaptive, bounded, default, off)
+#     - adaptive: 推荐值，根据负载自适应预取专家权重，显著减少 SSD I/O 阻塞，提升解码速率 ~30%
+#     - bounded:  受限预取
+#     - default:  系统默认预取
+#     - off:      关闭预取
+RDADVISE="adaptive"
+RDADVISE="${TURBO_RDADVISE:-${RDADVISE:-adaptive}}"
+
+# 12. 路径与本体配置 (默认指向用户主目录下的本体 ~/turbo-fieldfare)
 TURBO_DIR="${TURBO_FIELDFARE_DIR:-$HOME/turbo-fieldfare}"
 PROJECT_DIR="$TURBO_DIR"
 MODEL_PATH="$PROJECT_DIR/scratch/gemma4.gturbo"
@@ -167,6 +175,7 @@ start() {
     echo "   ├─ Prefill 分块: $PREFILL_CHUNK_TOKENS"
     echo "   ├─ 视觉模块: $([ -d "$VISION_PATH" ] && echo "已挂载 ($VISION_RESIDENCY)" || echo "未安装")"
     echo "   ├─ 深度思考: $THINKING"
+    echo "   ├─ 读优化策略: $RDADVISE"
     echo "   └─ 模型路径: $MODEL_PATH"
 
     nohup "$BINARY" \
@@ -179,6 +188,7 @@ start() {
         --prefill-chunk-tokens "$PREFILL_CHUNK_TOKENS" \
         --prompt-cache-mode "$PROMPT_CACHE_MODE" \
         --thinking "$THINKING" \
+        --rdadvise "$RDADVISE" \
         "${VISION_FLAGS[@]}" > "$LOG_FILE" 2>&1 &
 
     local pid=$!

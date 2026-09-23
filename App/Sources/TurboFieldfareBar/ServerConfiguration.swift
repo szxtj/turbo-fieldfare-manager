@@ -31,6 +31,9 @@ public struct ServerConfiguration: Codable, Equatable {
     // 10. 允许超出显存预算强制启动 (TURBO_FIELDFARE_ALLOW_UNBACKED_CONTEXT=1)
     public var allowUnbackedContext: Bool
 
+    // 11. 自适应读优化 / 专家预取策略 (adaptive, bounded, default, off)
+    public var rdadvise: String
+
     public init(
         port: Int = 1235,
         maxContext: Int = 32768,
@@ -41,7 +44,8 @@ public struct ServerConfiguration: Codable, Equatable {
         visionResidency: String = "on-demand",
         promptCacheMode: String = "single-prefix",
         thinking: String = "default",
-        allowUnbackedContext: Bool = false
+        allowUnbackedContext: Bool = false,
+        rdadvise: String = "adaptive"
     ) {
         self.port = port
         self.maxContext = maxContext
@@ -53,12 +57,13 @@ public struct ServerConfiguration: Codable, Equatable {
         self.promptCacheMode = promptCacheMode
         self.thinking = thinking
         self.allowUnbackedContext = allowUnbackedContext
+        self.rdadvise = rdadvise
     }
 
     enum CodingKeys: String, CodingKey {
         case port, maxContext, expertCacheSlots, expertCachePolicy
         case prefill, prefillChunkTokens, visionResidency, promptCacheMode
-        case thinking, allowUnbackedContext
+        case thinking, allowUnbackedContext, rdadvise
     }
 
     public init(from decoder: any Decoder) throws {
@@ -73,6 +78,7 @@ public struct ServerConfiguration: Codable, Equatable {
         promptCacheMode = try container.decode(String.self, forKey: .promptCacheMode)
         thinking = try container.decodeIfPresent(String.self, forKey: .thinking) ?? "default"
         allowUnbackedContext = try container.decodeIfPresent(Bool.self, forKey: .allowUnbackedContext) ?? false
+        rdadvise = try container.decodeIfPresent(String.self, forKey: .rdadvise) ?? "adaptive"
     }
 
     /// 官方与脚本默认推荐配置基准
@@ -86,7 +92,8 @@ public struct ServerConfiguration: Codable, Equatable {
         visionResidency: "on-demand",
         promptCacheMode: "single-prefix",
         thinking: "default",
-        allowUnbackedContext: false
+        allowUnbackedContext: false,
+        rdadvise: "adaptive"
     )
 
     private static let userDefaultsKey = "TurboFieldfare_ServerConfiguration"
@@ -135,6 +142,7 @@ public struct ServerConfiguration: Codable, Equatable {
         export TURBO_PROMPT_CACHE_MODE="\(promptCacheMode)"
         export TURBO_THINKING="\(thinking)"
         export TURBO_FIELDFARE_ALLOW_UNBACKED_CONTEXT=\(allowUnbackedContext ? "1" : "0")
+        export TURBO_RDADVISE="\(rdadvise)"
         """
         try? envContent.write(to: ServerConfiguration.envConfigFile, atomically: true, encoding: .utf8)
     }
@@ -151,7 +159,8 @@ public struct ServerConfiguration: Codable, Equatable {
             "TURBO_VISION_RESIDENCY": visionResidency,
             "TURBO_PROMPT_CACHE_MODE": promptCacheMode,
             "TURBO_THINKING": thinking,
-            "TURBO_FIELDFARE_ALLOW_UNBACKED_CONTEXT": allowUnbackedContext ? "1" : "0"
+            "TURBO_FIELDFARE_ALLOW_UNBACKED_CONTEXT": allowUnbackedContext ? "1" : "0",
+            "TURBO_RDADVISE": rdadvise
         ]
     }
 }

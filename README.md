@@ -60,6 +60,7 @@ Configure runtime parameters visually without editing shell scripts:
 - **KV Prompt Cache**: `single-prefix` reuse mode to slash Time-to-First-Token (TTFT), or `off`.
 - **Chunked Prefill**: Enabled with auto chunk size (capped at optimal 256 tokens).
 - **Vision Companion Pack Residency**: `on-demand` (loads vision tower only during image requests, saving memory) or `keep-ready`.
+- **Read Optimization (RDADVISE)**: Adaptive prefetching (`adaptive`, recommended default), bounded, default, or off to slash SSD I/O stalls.
 - **Hot Restart & Sync**: Supports "Save & Restart", "Restore Defaults", and auto-exports settings to `~/Library/Application Support/TurboFieldfare/config.env` for CLI sharing.
 
 #### 3. Setup & Self-Healing Recovery Wizard
@@ -175,6 +176,7 @@ cd ~/Projects/turbo-fieldfare-manager
 - **分块 Prefill 预热**：支持开启并配置分块大小（`auto` 自动上限 256 tokens）；
 - **视觉伴生包驻留策略**：`on-demand`（按需加载，节省显存）或 `keep-ready`（始终常驻）；
 - **深度思考推理策略**：支持 `default`（由客户端控制）、`on`（强制始终思考）、`off`（最高速直接回复）；
+- **自适应读优化预取**：支持 `adaptive`（自适应预取，默认推荐，智能预取专家大幅降低 SSD I/O 阻塞）、`bounded`（受限预取）、`default`（系统默认）与 `off`（关闭）；
 - **热重启与环境同步**：支持“保存并重启服务”、“恢复默认配置”，并自动同步生成 `config.env` 供终端脚本共享。
 
 #### 3. 首次引导与故障自愈向导
