@@ -6,7 +6,7 @@ public final class StatusAndLogWindowController: NSWindowController {
 
     private init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 740, height: 580),
+            contentRect: NSRect(x: 0, y: 0, width: 780, height: 600),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
@@ -67,7 +67,7 @@ public struct StatusAndLogView: View {
             // MARK: - 日志区域
             logConsoleView
         }
-        .frame(minWidth: 660, minHeight: 500)
+        .frame(minWidth: 700, minHeight: 500)
         .onAppear {
             manager.reloadLogs()
         }
@@ -110,6 +110,27 @@ public struct StatusAndLogView: View {
                 }
                 .font(.caption)
                 .foregroundColor(.secondary)
+
+                HStack(spacing: 8) {
+                    if let metrics = manager.lastGenerationMetrics {
+                        Label(
+                            l10n.tr(
+                                "Last Speed: \(String(format: "%.2f", metrics.tgSpeed)) tok/s (\(metrics.completionTokens) tokens / \(String(format: "%.2f", metrics.tgDuration))s, excl. prefill)",
+                                "上次生成速度: \(String(format: "%.2f", metrics.tgSpeed)) tok/s (\(metrics.completionTokens) 字 / \(String(format: "%.2f", metrics.tgDuration))s，纯解码无 Prefill)"
+                            ),
+                            systemImage: "speedometer"
+                        )
+                        .foregroundColor(.accentColor)
+                        .fontWeight(.medium)
+                    } else {
+                        Label(
+                            l10n.tr("Last Speed: Idle / Waiting for requests...", "上次生成速度: 等待生成响应..."),
+                            systemImage: "speedometer"
+                        )
+                        .foregroundColor(.secondary)
+                    }
+                }
+                .font(.caption)
             }
 
             Spacer()
@@ -140,10 +161,24 @@ public struct StatusAndLogView: View {
 
     // MARK: - 工具栏
     private var actionToolbar: some View {
-        HStack(spacing: 12) {
-            // API 快速复制
+        HStack(spacing: 10) {
+            // 复制 Base URL
+            Button(action: copyBaseURL) {
+                Label(l10n.tr("Copy Base URL", "复制 Base URL"), systemImage: "link")
+            }
+            .buttonStyle(.bordered)
+            .help("http://127.0.0.1:\(manager.port)/v1")
+
+            // 复制 Model ID
+            Button(action: copyModelID) {
+                Label(l10n.tr("Copy Model ID", "复制 Model ID"), systemImage: "tag")
+            }
+            .buttonStyle(.bordered)
+            .help(manager.modelID)
+
+            // API 快速复制 cURL
             Button(action: copyCurl) {
-                Label(l10n.tr("Copy Test cURL", "复制测试 cURL"), systemImage: "doc.on.doc")
+                Label(l10n.tr("Copy cURL", "复制 cURL"), systemImage: "doc.on.doc")
             }
             .buttonStyle(.bordered)
 
@@ -275,6 +310,32 @@ public struct StatusAndLogView: View {
         NSPasteboard.general.setString(curlCommand, forType: .string)
         withAnimation {
             copyBanner = l10n.tr("cURL command copied to clipboard!", "cURL 指令已复制到剪贴板！")
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            withAnimation {
+                copyBanner = nil
+            }
+        }
+    }
+
+    private func copyBaseURL() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(manager.baseURL, forType: .string)
+        withAnimation {
+            copyBanner = l10n.tr("Base URL copied (\(manager.baseURL))!", "Base URL 已复制 (\(manager.baseURL))！")
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            withAnimation {
+                copyBanner = nil
+            }
+        }
+    }
+
+    private func copyModelID() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(manager.modelID, forType: .string)
+        withAnimation {
+            copyBanner = l10n.tr("Model ID copied (\(manager.modelID))!", "Model ID 已复制 (\(manager.modelID))！")
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
             withAnimation {

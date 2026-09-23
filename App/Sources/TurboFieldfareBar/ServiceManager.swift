@@ -38,6 +38,15 @@ public struct RepoCheckResult {
     public let message: String
 }
 
+public struct GenerationMetrics: Equatable {
+    public let tgSpeed: Double        // tok/s (token generation speed, excluding prefill)
+    public let tgDuration: Double     // token generation duration in seconds
+    public let completionTokens: Int  // number of generated tokens
+    public let promptTokens: Int      // number of prompt tokens
+    public let ppSpeed: Double        // prefill tokens per second
+    public let ppDuration: Double     // prefill duration in seconds
+}
+
 @MainActor
 public final class ServiceManager: ObservableObject {
     public static let shared = ServiceManager()
@@ -45,9 +54,12 @@ public final class ServiceManager: ObservableObject {
     @Published public private(set) var state: ServiceState = .stopped
     @Published public private(set) var lastLogLines: [String] = []
     @Published public private(set) var repoStatus: RepoCheckResult?
+    @Published public private(set) var lastGenerationMetrics: GenerationMetrics?
     @Published public var config: ServerConfiguration
 
     public var port: Int { config.port }
+    public var baseURL: String { "http://127.0.0.1:\(port)/v1" }
+    public let modelID: String = "gemma-4-26b-a4b-it"
     public let homeDir: URL
     public let repoDir: URL
     public let modelDir: URL
@@ -576,6 +588,14 @@ public final class ServiceManager: ObservableObject {
             let lines = content.components(separatedBy: .newlines)
             let tail = lines.suffix(200).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
             self.lastLogLines = Array(tail)
+
+            // 倒序寻找最后一次成功生成的请求耗时与速度指标 (纯解码，排除 prefill)
+            for line in lines.reversed() {
+                if let metrics = parseGenerationMetrics(from: line) {
+                    self.lastGenerationMetrics = metrics
+                    break
+                }
+            }
         } catch {
             // ignore
         }
@@ -584,5 +604,46 @@ public final class ServiceManager: ObservableObject {
     public func clearLogs() {
         try? "".write(to: logFile, atomically: true, encoding: .utf8)
         self.lastLogLines = []
+        self.lastGenerationMetrics = nil
+    }
+
+    /// 从服务端日志行中解析最新一次生成的速度指标 (tg = token generation, 纯解码)
+    /// 示例行: [2026-09-22T19:08:10Z] request ... completed in 180.491s prompt=261 cached=0 completion=1113 pp=9.188s pp_tok_s=28.406 tg=171.245s tg_tok_s=6.499 finish=stop
+    private func parseGenerationMetrics(from line: String) -> GenerationMetrics? {
+        guard line.contains("completed in") && line.contains("tg_tok_s=") else {
+            return nil
+        }
+
+        func extractDouble(key: String) -> Double? {
+            guard let range = line.range(of: key) else { return nil }
+            let sub = line[range.upperBound...]
+            let token = sub.prefix(while: { $0.isNumber || $0 == "." })
+            return Double(token)
+        }
+
+        func extractInt(key: String) -> Int? {
+            guard let range = line.range(of: key) else { return nil }
+            let sub = line[range.upperBound...]
+            let token = sub.prefix(while: { $0.isNumber })
+            return Int(token)
+        }
+
+        guard let tgSpeed = extractDouble(key: "tg_tok_s="),
+              let tgDuration = extractDouble(key: "tg="),
+              let completionTokens = extractInt(key: "completion=") else {
+            return nil
+        }
+        let promptTokens = extractInt(key: "prompt=") ?? 0
+        let ppSpeed = extractDouble(key: "pp_tok_s=") ?? 0
+        let ppDuration = extractDouble(key: "pp=") ?? 0
+
+        return GenerationMetrics(
+            tgSpeed: tgSpeed,
+            tgDuration: tgDuration,
+            completionTokens: completionTokens,
+            promptTokens: promptTokens,
+            ppSpeed: ppSpeed,
+            ppDuration: ppDuration
+        )
     }
 }

@@ -44,13 +44,13 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
         guard let button = statusItem.button else { return }
 
         let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+        button.title = "" // 去掉所有状态下的文字/字母，只保留图标本身随状态变化
         switch manager.state {
         case .running:
             if let image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Running")?.withSymbolConfiguration(config) {
                 image.isTemplate = true
                 button.image = image
             }
-            button.title = " TF"
             button.toolTip = l10n.tr(
                 "TurboFieldfare: Running (Port: \(manager.port))",
                 "TurboFieldfare: 运行中 (端口: \(manager.port))"
@@ -60,7 +60,6 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
                 image.isTemplate = true
                 button.image = image
             }
-            button.title = " ..."
             button.toolTip = l10n.tr(
                 "TurboFieldfare: Starting up / Initializing...",
                 "TurboFieldfare: 正在启动/初始化..."
@@ -70,7 +69,6 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
                 image.isTemplate = true
                 button.image = image
             }
-            button.title = ""
             button.toolTip = l10n.tr(
                 "TurboFieldfare: Service stopped",
                 "TurboFieldfare: 服务已停止"
@@ -80,7 +78,6 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
                 image.isTemplate = true
                 button.image = image
             }
-            button.title = " !"
             button.toolTip = l10n.tr(
                 "TurboFieldfare: Missing upstream repo (~/turbo-fieldfare)",
                 "TurboFieldfare: 未找到本体仓库 (~/turbo-fieldfare)"
@@ -90,7 +87,6 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
                 image.isTemplate = true
                 button.image = image
             }
-            button.title = ""
             button.toolTip = l10n.tr(
                 "TurboFieldfare Error: \(msg)",
                 "TurboFieldfare 异常: \(msg)"
@@ -128,6 +124,36 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
         let statusItem = NSMenuItem(title: statusText, action: nil, keyEquivalent: "")
         statusItem.isEnabled = false
         menu.addItem(statusItem)
+
+        // 上一次生成速度指标 (纯解码，排除 prefill)
+        if manager.state.isRunning {
+            if let metrics = manager.lastGenerationMetrics {
+                let speed = String(format: "%.2f", metrics.tgSpeed)
+                let metricsText = "⚡ " + l10n.tr(
+                    "Last Decode: \(speed) tok/s (\(metrics.completionTokens) tok, pure decode)",
+                    "上次生成速度: \(speed) tok/s (\(metrics.completionTokens) 字，纯解码)"
+                )
+                let metricsItem = NSMenuItem(title: metricsText, action: nil, keyEquivalent: "")
+                metricsItem.isEnabled = false
+                menu.addItem(metricsItem)
+            }
+
+            let copyBaseURLItem = NSMenuItem(
+                title: "🔗 " + l10n.tr("Copy Base URL (\(manager.baseURL))", "复制 Base URL (\(manager.baseURL))"),
+                action: #selector(copyBaseURLAction),
+                keyEquivalent: ""
+            )
+            copyBaseURLItem.target = self
+            menu.addItem(copyBaseURLItem)
+
+            let copyModelItem = NSMenuItem(
+                title: "🏷️ " + l10n.tr("Copy Model ID (\(manager.modelID))", "复制 Model ID (\(manager.modelID))"),
+                action: #selector(copyModelIDAction),
+                keyEquivalent: ""
+            )
+            copyModelItem.target = self
+            menu.addItem(copyModelItem)
+        }
 
         menu.addItem(NSMenuItem.separator())
 
@@ -346,6 +372,16 @@ public final class StatusBarController: NSObject, NSMenuDelegate {
                 SetupAndRecoveryWindowController.shared.show(mode: .recovery)
             }
         }
+    }
+
+    @objc private func copyBaseURLAction() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(manager.baseURL, forType: .string)
+    }
+
+    @objc private func copyModelIDAction() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(manager.modelID, forType: .string)
     }
 
     @objc private func quitApp() {
